@@ -21,8 +21,14 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
-from pyspark.sql import SparkSession
-from pyspark.sql import functions as F
+import pandas as pd
+
+try:
+    from pyspark.sql import SparkSession
+    from pyspark.sql import functions as F
+    SPARK_AVAILABLE = True
+except ImportError:
+    SPARK_AVAILABLE = False
 
 from dp_utils import add_dp, repeat_runs, privacy_amplification_subsampling, compute_noise_variance
 from sensitivity import compute_global_sensitivity, sensitivity_report
@@ -63,6 +69,8 @@ def parse_args():
     p.add_argument('--delta', type=float, default=1e-5)
     p.add_argument('--skip_ml', action='store_true',
                    help='Skip DP-ML experiment (faster runs)')
+    p.add_argument('--no_spark', action='store_true',
+                   help='Use pandas instead of Spark (works without a Spark installation)')
     return p.parse_args()
 
 
@@ -287,6 +295,20 @@ def plot_sensitivity_comparison(sens_rows, path):
 # Module 1: DP Aggregates with data-driven sensitivity
 # ---------------------------------------------------------------------------
 
+def _feature_stats_pandas(df_pandas, feature):
+    """Compute count, mean, sum from pandas (Spark fallback)."""
+    col = df_pandas[feature].dropna().astype(float)
+    return int(len(col)), float(col.mean()), float(col.sum())
+
+
+def _feature_stats_spark(df_spark, feature):
+    """Compute count, mean, sum from Spark."""
+    df_f = df_spark.select(F.col(feature).cast('double').alias(feature)).dropna()
+    n = df_f.count()
+    agg = df_f.agg(F.avg(feature).alias('avg'), F.sum(feature).alias('sum')).first()
+    return n, agg['avg'], agg['sum']
+
+
 def run_dp_aggregates(df_spark, df_pandas, features, epsilons, mechanisms,
                        n_runs, delta, results_dir):
     logging.info('=== Module 1: DP Aggregates (data-driven sensitivity) ===')
@@ -300,15 +322,17 @@ def run_dp_aggregates(df_spark, df_pandas, features, epsilons, mechanisms,
 
         # Data-driven sensitivities
         rep = sensitivity_report(data_col, 'mean')
-        sens_rows.append({'feature': feature, **rep})
-        gs = rep['global_sensitivity']
+        gs = max(rep['global_sensitivity'], 1e-10)  # guard against zero-range features
         ls = rep['local_sensitivity']
+        sens_rows.append({'feature': feature, **rep, 'global_sensitivity': gs})
 
-        df_f = df_spark.select(F.col(feature).cast('double').alias(feature)).dropna()
-        n_rows = df_f.count()
-        true_avg = df_f.agg(F.avg(feature).alias('v')).first()['v']
-        sum_val = df_f.agg(F.sum(feature).alias('v')).first()['v']
-        if true_avg is None:
+        # Use Spark if available, else pandas
+        if df_spark is not None:
+            n_rows, true_avg, sum_val = _feature_stats_spark(df_spark, feature)
+        else:
+            n_rows, true_avg, sum_val = _feature_stats_pandas(df_pandas, feature)
+
+        if true_avg is None or np.isnan(true_avg):
             continue
 
         logging.info(f'  {feature}: GS={gs:.4g} LS={ls:.4g} mean={true_avg:.4g}')
@@ -589,15 +613,27 @@ def main():
     setup_logging(args.log)
     ensure_dir(args.results_dir)
 
-    spark = SparkSession.builder \
-        .appName('DP-Research-Framework') \
-        .config('spark.driver.memory', '4g') \
-        .getOrCreate()
-    spark.sparkContext.setLogLevel('ERROR')
+    use_spark = SPARK_AVAILABLE and not args.no_spark
 
-    logging.info(f'Loading dataset: {args.dataset}')
-    df_spark = spark.read.csv(args.dataset, header=True, inferSchema=True)
-    df_pandas = df_spark.toPandas()
+    if use_spark:
+        spark = SparkSession.builder \
+            .appName('DP-Research-Framework') \
+            .config('spark.driver.memory', '4g') \
+            .getOrCreate()
+        spark.sparkContext.setLogLevel('ERROR')
+        logging.info(f'Loading dataset via Spark: {args.dataset}')
+        df_spark = spark.read.csv(args.dataset, header=True, inferSchema=True)
+        df_pandas = df_spark.toPandas()
+    else:
+        spark = None
+        df_spark = None
+        if not SPARK_AVAILABLE:
+            logging.info('PySpark not installed — running in pandas-only mode.')
+        else:
+            logging.info('--no_spark flag set — running in pandas-only mode.')
+        logging.info(f'Loading dataset via pandas: {args.dataset}')
+        df_pandas = pd.read_csv(args.dataset)
+
     logging.info(f'Dataset shape: {df_pandas.shape}')
 
     # Feature selection
@@ -613,11 +649,9 @@ def main():
         logging.warning(f'Skipped missing features: {missing}')
     logging.info(f'Using features: {features}')
 
-    # Convert numeric features
+    # Convert numeric feature columns to float (handles any stray strings)
     for f in features:
-        df_pandas[f] = df_pandas[f].apply(
-            lambda x: float(x) if str(x).replace('.', '', 1).replace('-', '', 1).isdigit() else np.nan
-        )
+        df_pandas[f] = pd.to_numeric(df_pandas[f], errors='coerce')
 
     label_col = detect_label_column(df_pandas)
     logging.info(f'Detected label column: {label_col}')
@@ -643,7 +677,8 @@ def main():
         run_dp_ml(df_pandas, features, label_col, eps, mechs,
                   delta, args.results_dir)
 
-    spark.stop()
+    if spark is not None:
+        spark.stop()
     logging.info('All experiments complete.  Results in: ' + args.results_dir)
 
 

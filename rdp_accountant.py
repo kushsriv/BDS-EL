@@ -40,6 +40,9 @@ def rdp_laplace(alpha, epsilon):
     if alpha == 1 or np.isinf(alpha):
         return float(epsilon)
     a, e = float(alpha), float(epsilon)
+    # Guard overflow for large alpha*epsilon (dominant term → e + const/a)
+    if (a - 1) * e > 500:
+        return float(e + np.log(a / (2 * a - 1)) / (a - 1))
     term1 = a / (2 * a - 1) * np.exp((a - 1) * e)
     term2 = (a - 1) / (2 * a - 1) * np.exp(-a * e)
     log_val = np.log(max(term1 + term2, 1e-300))
