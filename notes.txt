@@ -1,0 +1,10 @@
+function on epsilon : 
+
+
+| ε value | Noise                      |
+| ------- | -------------------------- |
+| Small ε | Large noise (more privacy) |
+| Large ε | Small noise (less privacy) |
+
+
+sensitivity : it tells how much can a single entry affect the overall value.
