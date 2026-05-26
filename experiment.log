@@ -2,3 +2,51 @@
 2026-05-26 15:21:54,937 INFO: Closing down clientserver connection
 2026-05-26 15:24:34,862 INFO: ===== FEATURE: src_bytes =====
 2026-05-26 15:24:40,007 INFO: Closing down clientserver connection
+2026-05-26 16:27:29,913 INFO: PySpark not installed — running in pandas-only mode.
+2026-05-26 16:27:29,914 INFO: Loading dataset via pandas: KDDTrain+.csv
+2026-05-26 16:27:30,626 INFO: Dataset shape: (125973, 43)
+2026-05-26 16:27:30,626 INFO: Using features: ['src_bytes', 'count', 'srv_count']
+2026-05-26 16:27:30,644 INFO: Detected label column: dst_host_srv_rerror_rate
+2026-05-26 16:27:30,644 INFO: === Module 1: DP Aggregates (data-driven sensitivity) ===
+2026-05-26 16:27:30,648 INFO:   src_bytes: GS=1.04e+04 LS=1.04e+04 mean=1.978e+04
+2026-05-26 16:27:31,649 INFO:   count: GS=0.004056 LS=0.003836 mean=27.74
+2026-05-26 16:27:32,417 INFO:   srv_count: GS=7.938e-06 LS=5.68e-06 mean=0.2845
+2026-05-26 16:27:33,106 INFO: Saved results/aggregate_results.csv
+2026-05-26 16:27:33,106 INFO: Saved results/sensitivity_report.csv
+2026-05-26 16:27:33,223 INFO: === Module 2: RDP Composition Analysis ===
+2026-05-26 16:27:33,234 INFO: Saved results/rdp_composition.csv
+2026-05-26 16:27:33,717 INFO: === Module 3: Privacy Amplification by Subsampling ===
+2026-05-26 16:27:33,717 INFO: Saved results/amplification_results.csv
+2026-05-26 16:27:33,949 INFO: === Module 4: Membership Inference Attacks ===
+2026-05-26 16:27:34,655 INFO: Saved results/mia_results.csv
+2026-05-26 16:27:34,655 INFO: === Module 5: Local DP vs. Central DP ===
+2026-05-26 16:27:43,100 INFO: Saved results/ldp_results.csv
+2026-05-26 16:27:43,100 INFO: Saved results/central_dp_results.csv
+2026-05-26 16:27:43,100 INFO: All experiments complete.  Results in: results
+2026-05-26 16:28:17,518 INFO: PySpark not installed — running in pandas-only mode.
+2026-05-26 16:28:17,518 INFO: Loading dataset via pandas: KDDTrain+.csv
+2026-05-26 16:28:17,772 INFO: Dataset shape: (125973, 43)
+2026-05-26 16:28:17,772 INFO: Using features: ['src_bytes', 'count', 'srv_count']
+2026-05-26 16:28:17,790 INFO: Detected label column: dst_host_srv_rerror_rate
+2026-05-26 16:28:17,791 INFO: === Module 1: DP Aggregates (data-driven sensitivity) ===
+2026-05-26 16:28:17,794 INFO:   src_bytes: GS=1.04e+04 LS=1.04e+04 mean=1.978e+04
+2026-05-26 16:28:19,145 INFO:   count: GS=0.004056 LS=0.003836 mean=27.74
+2026-05-26 16:28:20,498 INFO:   srv_count: GS=7.938e-06 LS=5.68e-06 mean=0.2845
+2026-05-26 16:28:21,778 INFO: Saved results/aggregate_results.csv
+2026-05-26 16:28:21,778 INFO: Saved results/sensitivity_report.csv
+2026-05-26 16:28:21,891 INFO: === Module 2: RDP Composition Analysis ===
+2026-05-26 16:28:21,902 INFO: Saved results/rdp_composition.csv
+2026-05-26 16:28:22,422 INFO: === Module 3: Privacy Amplification by Subsampling ===
+2026-05-26 16:28:22,422 INFO: Saved results/amplification_results.csv
+2026-05-26 16:28:22,636 INFO: === Module 4: Membership Inference Attacks ===
+2026-05-26 16:28:23,342 INFO: Saved results/mia_results.csv
+2026-05-26 16:28:23,343 INFO: === Module 5: Local DP vs. Central DP ===
+2026-05-26 16:28:36,793 INFO: Saved results/ldp_results.csv
+2026-05-26 16:28:36,794 INFO: Saved results/central_dp_results.csv
+2026-05-26 16:28:36,794 INFO: === Module 6: DP-ML — Intrusion Detection ===
+2026-05-26 16:28:36,794 INFO:   Using label column: "dst_host_srv_rerror_rate"
+2026-05-26 16:28:36,816 INFO:   Train: (10501, 3)  Test: (4499, 3)  Attack rate train=47.04% test=47.05%
+2026-05-26 16:28:38,106 INFO:   laplace: baseline=0.8084  ε=5.0 acc=0.8004
+2026-05-26 16:28:39,360 INFO:   gaussian: baseline=0.8084  ε=5.0 acc=0.5295
+2026-05-26 16:28:39,360 INFO: Saved results/dp_ml_results.csv
+2026-05-26 16:28:39,628 INFO: All experiments complete.  Results in: results
