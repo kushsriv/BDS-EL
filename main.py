@@ -31,11 +31,16 @@ except ImportError:
     SPARK_AVAILABLE = False
 
 from dp_utils import add_dp, repeat_runs, privacy_amplification_subsampling, compute_noise_variance
-from sensitivity import compute_global_sensitivity, sensitivity_report
+from sensitivity import compute_global_sensitivity, sensitivity_report, compute_clipped_sensitivity
 from rdp_accountant import RDPAccountant, rdp_laplace, rdp_gaussian, advanced_composition_bound
 from membership_inference import sweep_mia, theoretical_mia_bound
 from local_dp import run_ldp_experiment
-from dp_ml import prepare_kdd_data, run_dp_ml_experiment
+from dp_ml import (prepare_kdd_data, run_dp_ml_experiment,
+                   run_multiclass_experiment, compare_budget_methods,
+                   encode_multiclass_labels, _CLASS_NAMES,
+                   _confidence_interval, wilcoxon_signed_rank)
+from dp_sgd import run_dpsgd_experiment, dp_sgd_privacy_spent
+from weighted_budget import budget_comparison_report
 
 
 # ---------------------------------------------------------------------------
@@ -69,8 +74,18 @@ def parse_args():
     p.add_argument('--delta', type=float, default=1e-5)
     p.add_argument('--skip_ml', action='store_true',
                    help='Skip DP-ML experiment (faster runs)')
+    p.add_argument('--skip_multiclass', action='store_true',
+                   help='Skip 5-class IDS experiment')
+    p.add_argument('--skip_budget_compare', action='store_true',
+                   help='Skip budget allocation comparison')
+    p.add_argument('--skip_dpsgd', action='store_true',
+                   help='Skip DP-SGD experiment')
     p.add_argument('--no_spark', action='store_true',
                    help='Use pandas instead of Spark (works without a Spark installation)')
+    p.add_argument('--max_ml_rows', type=int, default=20000,
+                   help='Max rows for DP-ML experiments (for speed)')
+    p.add_argument('--ml_runs', type=int, default=30,
+                   help='Repetitions for DP-ML confidence intervals')
     return p.parse_args()
 
 
@@ -100,7 +115,6 @@ def detect_label_column(df_pandas):
     """
     for col in df_pandas.columns:
         dtype = df_pandas[col].dtype
-        # Match object dtype or any pandas string-based dtype
         is_str = (dtype == object or
                   hasattr(dtype, 'name') and dtype.name in ('str', 'string', 'object'))
         if not is_str:
@@ -112,6 +126,28 @@ def detect_label_column(df_pandas):
         except Exception:
             continue
     return None
+
+
+def auto_detect_numerical_features(df_pandas, exclude_cols=None):
+    """
+    Auto-detect all usable numerical feature columns.
+
+    Excludes: the label column, row ID columns (index, id), and
+    metadata columns (difficulty_level).
+    """
+    if exclude_cols is None:
+        exclude_cols = set()
+    always_exclude = {'index', 'difficulty_level', 'id', 'label', 'class'}
+    exclude_cols = set(exclude_cols) | always_exclude
+
+    features = []
+    for col in df_pandas.columns:
+        if col in exclude_cols:
+            continue
+        numeric = pd.to_numeric(df_pandas[col], errors='coerce')
+        if numeric.notna().mean() > 0.95:
+            features.append(col)
+    return features
 
 
 # ---------------------------------------------------------------------------
@@ -573,8 +609,9 @@ def run_local_dp(df_pandas, features, epsilons, mechanisms, delta, results_dir):
 # Module 6: DP-ML — Intrusion Detection
 # ---------------------------------------------------------------------------
 
-def run_dp_ml(df_pandas, features, label_col, epsilons, mechanisms, delta, results_dir):
-    logging.info('=== Module 6: DP-ML — Intrusion Detection ===')
+def run_dp_ml(df_pandas, features, label_col, epsilons, mechanisms, delta,
+              results_dir, max_rows=20000, n_runs=30):
+    logging.info('=== Module 6: DP-ML — Binary Intrusion Detection ===')
     if label_col is None:
         logging.warning('No label column found; skipping DP-ML experiment.')
         return []
@@ -582,22 +619,30 @@ def run_dp_ml(df_pandas, features, label_col, epsilons, mechanisms, delta, resul
     logging.info(f'  Using label column: "{label_col}"')
     X_train, X_test, y_train, y_test = prepare_kdd_data(
         df_pandas, features, label_col,
-        test_size=0.3, max_rows=15000,
+        test_size=0.3, max_rows=max_rows,
     )
     logging.info(f'  Train: {X_train.shape}  Test: {X_test.shape}  '
                  f'Attack rate train={y_train.mean():.2%} test={y_test.mean():.2%}')
 
     all_ml = []
     for mech in mechanisms:
+        # Standard uniform budget (clipped sensitivity)
         ml_rows, base_acc = run_dp_ml_experiment(
             X_train, X_test, y_train, y_test,
-            epsilons, mechanism=mech, n_runs=5, delta=delta,
+            epsilons, mechanism=mech, n_runs=n_runs, delta=delta,
+            sensitivity_method='clipped', budget_method='uniform',
         )
-        for r in ml_rows:
-            r['mechanism_label'] = mech
         all_ml.extend(ml_rows)
+        # MI-weighted budget (novel)
+        ml_rows_mi, _ = run_dp_ml_experiment(
+            X_train, X_test, y_train, y_test,
+            epsilons, mechanism=mech, n_runs=n_runs, delta=delta,
+            sensitivity_method='clipped', budget_method='mi',
+        )
+        all_ml.extend(ml_rows_mi)
         logging.info(f'  {mech}: baseline={base_acc:.4f}  '
-                     f'ε={epsilons[-1]} acc={ml_rows[-1]["accuracy"]:.4f}')
+                     f'ε={epsilons[-1]} uniform={ml_rows[-1]["accuracy"]:.4f}'
+                     f' mi_weighted={ml_rows_mi[-1]["accuracy"]:.4f}')
 
     save_csv(all_ml, os.path.join(results_dir, 'dp_ml_results.csv'))
     plot_dp_ml(all_ml, os.path.join(results_dir, 'dp_ml.png'))
@@ -607,6 +652,162 @@ def run_dp_ml(df_pandas, features, label_col, epsilons, mechanisms, delta, resul
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+def run_budget_comparison(df_pandas, features, label_col, epsilons, delta,
+                           max_rows, ml_runs, results_dir):
+    """Module 7: Compare uniform vs. MI/variance/SNR-weighted budget allocation."""
+    logging.info('=== Module 7: Budget Allocation Comparison ===')
+    if label_col is None:
+        logging.warning('No label column; skipping budget comparison.')
+        return []
+
+    X_train, X_test, y_train, y_test = prepare_kdd_data(
+        df_pandas, features, label_col, max_rows=max_rows
+    )
+    logging.info(f'  Budget comparison: Train={X_train.shape} Test={X_test.shape}')
+
+    all_rows = compare_budget_methods(
+        X_train, X_test, y_train, y_test,
+        epsilons=epsilons[:4],   # first 4 epsilons for speed
+        mechanism='laplace',
+        n_runs=ml_runs // 3,    # fewer runs for comparison
+        delta=delta,
+    )
+    save_csv(all_rows, os.path.join(results_dir, 'budget_comparison.csv'))
+
+    # Plot: accuracy vs epsilon, one line per budget method
+    dp_rows = [r for r in all_rows if r['mechanism'] != 'none']
+    methods = sorted(set(r['budget_method'] for r in dp_rows))
+    eps_vals = sorted(set(r['epsilon'] for r in dp_rows))
+    err_dict = {}
+    for m in methods:
+        err_dict[m] = [
+            np.mean([r['accuracy'] for r in dp_rows
+                     if r['budget_method'] == m and r['epsilon'] == e])
+            for e in eps_vals
+        ]
+    plot_privacy_utility(
+        eps_vals, err_dict,
+        'Budget Allocation: Accuracy vs. ε (Laplace)',
+        'Accuracy', os.path.join(results_dir, 'budget_comparison.png'),
+    )
+    return all_rows
+
+
+def run_multiclass(df_pandas, features, label_col, epsilons, delta,
+                   max_rows, ml_runs, results_dir):
+    """Module 8: 5-class IDS (Normal / DoS / Probe / R2L / U2R)."""
+    logging.info('=== Module 8: Multi-Class IDS (5 categories) ===')
+    if label_col is None:
+        logging.warning('No label column; skipping multi-class experiment.')
+        return []
+
+    X_train, X_test, y_train_mc, y_test_mc = prepare_kdd_data(
+        df_pandas, features, label_col, max_rows=max_rows, multiclass=True
+    )
+    logging.info(f'  Multi-class: Train={X_train.shape} classes={np.unique(y_train_mc)}')
+    class_dist = {_CLASS_NAMES[k]: int(np.sum(y_train_mc == k))
+                  for k in range(len(_CLASS_NAMES))}
+    logging.info(f'  Class distribution (train): {class_dist}')
+
+    all_rows = []
+    for mech in ['laplace']:
+        for budget in ['uniform', 'mi']:
+            rows, base_acc, _ = run_multiclass_experiment(
+                X_train, X_test, y_train_mc, y_test_mc,
+                epsilons=epsilons[:4],
+                mechanism=mech,
+                n_runs=max(5, ml_runs // 6),
+                delta=delta,
+                sensitivity_method='clipped',
+                budget_method=budget,
+            )
+            for r in rows:
+                r['mechanism'] = mech
+            all_rows.extend(rows)
+            logging.info(f'  {mech}/{budget}: baseline={base_acc:.4f}')
+
+    save_csv(all_rows, os.path.join(results_dir, 'multiclass_results.csv'))
+    return all_rows
+
+
+def run_dp_sgd_module(df_pandas, features, label_col, epsilons, delta,
+                       max_rows, ml_runs, results_dir):
+    """Module 9: DP-SGD vs. input perturbation."""
+    logging.info('=== Module 9: DP-SGD (Abadi et al. 2016) ===')
+    if label_col is None:
+        logging.warning('No label column; skipping DP-SGD experiment.')
+        return []
+
+    X_train, X_test, y_train, y_test = prepare_kdd_data(
+        df_pandas, features, label_col, max_rows=max_rows
+    )
+    logging.info(f'  DP-SGD: Train={X_train.shape} Test={X_test.shape}')
+
+    # Log theoretical accounting for reference
+    for eps in epsilons[:3]:
+        sigma_est = 1.5  # approximate; actual is found by binary search
+        n = X_train.shape[0]
+        actual_eps, alpha = dp_sgd_privacy_spent(n, 256, 30, sigma_est, delta)
+        logging.info(f'  DP-SGD σ={sigma_est:.2f}: ε_actual≈{actual_eps:.3f} (α={alpha})')
+
+    sgd_rows, base_acc = run_dpsgd_experiment(
+        X_train, X_test, y_train, y_test,
+        epsilons=epsilons[:4],
+        delta=delta,
+        n_runs=max(3, ml_runs // 10),
+        batch_size=256,
+        n_epochs=30,
+        clip_norm=1.0,
+    )
+    logging.info(f'  DP-SGD baseline={base_acc:.4f}  '
+                 f'ε={epsilons[min(3, len(epsilons)-1)]} acc={sgd_rows[-1]["accuracy"]:.4f}')
+
+    save_csv(sgd_rows, os.path.join(results_dir, 'dpsgd_results.csv'))
+    return sgd_rows
+
+
+def run_clipped_sensitivity_analysis(df_pandas, features, results_dir):
+    """Module 10: Clipped sensitivity comparison across all features."""
+    logging.info('=== Module 10: Clipped Sensitivity Analysis ===')
+    rows = []
+    for feature in features:
+        col = pd.to_numeric(df_pandas[feature], errors='coerce').dropna().values
+        if len(col) == 0:
+            continue
+        for p in [90.0, 95.0, 99.0, 99.5]:
+            cs = compute_clipped_sensitivity(col, 'mean', clip_percentile=p)
+            rows.append({
+                'feature': feature,
+                'clip_percentile': p,
+                'gs_raw': cs['gs_raw'],
+                'gs_clipped': cs['gs_clipped'],
+                'clip_threshold': cs['clip_threshold'],
+                'bias_bound': cs['bias_bound'],
+                'noise_reduction': cs['noise_reduction'],
+            })
+        if rows:
+            r99 = next(r for r in rows if r['feature'] == feature
+                       and r['clip_percentile'] == 99.0)
+            logging.info(f'  {feature}: noise_reduction@p99={r99["noise_reduction"]:.1f}×')
+
+    save_csv(rows, os.path.join(results_dir, 'clipped_sensitivity.csv'))
+
+    # Bar plot: noise reduction at p=99 across features
+    features_plot = [r['feature'] for r in rows if r['clip_percentile'] == 99.0]
+    nr = [r['noise_reduction'] for r in rows if r['clip_percentile'] == 99.0]
+    if features_plot:
+        fig, ax = plt.subplots(figsize=(max(10, len(features_plot) * 0.6), 4))
+        ax.bar(range(len(features_plot)), nr, color='#3b82f6')
+        ax.set_xticks(range(len(features_plot)))
+        ax.set_xticklabels(features_plot, rotation=45, ha='right', fontsize=7)
+        ax.set_ylabel('Noise reduction factor (×)')
+        ax.set_title('Clipped Sensitivity: Noise Reduction at 99th Percentile')
+        ax.set_yscale('log')
+        ax.grid(axis='y', alpha=0.3)
+        _save_fig(os.path.join(results_dir, 'clipped_sensitivity.png'))
+    return rows
+
 
 def main():
     args = parse_args()
@@ -636,25 +837,26 @@ def main():
 
     logging.info(f'Dataset shape: {df_pandas.shape}')
 
-    # Feature selection
-    default_features = [
-        'src_bytes', 'dst_bytes', 'count', 'srv_count',
-        'dst_host_count', 'dst_host_srv_count',
-        'serror_rate', 'same_srv_rate',
-    ]
-    features_requested = args.features if args.features else default_features
-    features = [f for f in features_requested if f in df_pandas.columns]
-    missing = [f for f in features_requested if f not in df_pandas.columns]
-    if missing:
-        logging.warning(f'Skipped missing features: {missing}')
-    logging.info(f'Using features: {features}')
+    # Detect label column first (so we can exclude it from features)
+    label_col = detect_label_column(df_pandas)
+    logging.info(f'Detected label column: {label_col}')
 
-    # Convert numeric feature columns to float (handles any stray strings)
+    # Feature selection: auto-detect all numerical columns if not specified
+    if args.features:
+        features = [f for f in args.features if f in df_pandas.columns]
+        missing = [f for f in args.features if f not in df_pandas.columns]
+        if missing:
+            logging.warning(f'Skipped missing features: {missing}')
+    else:
+        exclude = {label_col} if label_col else set()
+        features = auto_detect_numerical_features(df_pandas, exclude_cols=exclude)
+        logging.info(f'Auto-detected {len(features)} numerical features')
+
+    # Coerce all feature columns to float
     for f in features:
         df_pandas[f] = pd.to_numeric(df_pandas[f], errors='coerce')
 
-    label_col = detect_label_column(df_pandas)
-    logging.info(f'Detected label column: {label_col}')
+    logging.info(f'Using {len(features)} features: {features}')
 
     eps = args.epsilons
     mechs = args.mechanisms
@@ -662,7 +864,7 @@ def main():
 
     # ── Run all modules ──────────────────────────────────────────────────────
 
-    run_dp_aggregates(df_spark, df_pandas, features, eps, mechs,
+    run_dp_aggregates(df_spark, df_pandas, features[:8], eps, mechs,
                       args.runs, delta, args.results_dir)
 
     run_rdp_composition(mechs, eps, delta, args.results_dir)
@@ -671,11 +873,32 @@ def main():
 
     run_mia(df_pandas, features, eps, mechs, delta, args.results_dir)
 
-    run_local_dp(df_pandas, features, eps, mechs, delta, args.results_dir)
+    run_local_dp(df_pandas, features[:4], eps, mechs, delta, args.results_dir)
+
+    run_clipped_sensitivity_analysis(df_pandas, features, args.results_dir)
 
     if not args.skip_ml:
         run_dp_ml(df_pandas, features, label_col, eps, mechs,
-                  delta, args.results_dir)
+                  delta, args.results_dir,
+                  max_rows=args.max_ml_rows, n_runs=args.ml_runs)
+
+    if not args.skip_budget_compare:
+        run_budget_comparison(
+            df_pandas, features, label_col, eps, delta,
+            args.max_ml_rows, args.ml_runs, args.results_dir
+        )
+
+    if not args.skip_multiclass:
+        run_multiclass(
+            df_pandas, features, label_col, eps, delta,
+            args.max_ml_rows, args.ml_runs, args.results_dir
+        )
+
+    if not args.skip_dpsgd:
+        run_dp_sgd_module(
+            df_pandas, features, label_col, eps, delta,
+            args.max_ml_rows, args.ml_runs, args.results_dir
+        )
 
     if spark is not None:
         spark.stop()
