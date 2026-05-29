@@ -1,0 +1,88 @@
+INFO: PySpark not installed — running in pandas-only mode.
+INFO: Loading dataset via pandas: KDDTrain+.csv
+INFO: Dataset shape: (125973, 43)
+INFO: Detected label column: dst_host_srv_rerror_rate
+INFO: Auto-detected 37 numerical features
+INFO: Using 37 features: ['flag', 'src_bytes', 'dst_bytes', 'land', 'wrong_fragment', 'urgent', 'hot', 'num_failed_logins', 'logged_in', 'num_compromised', 'root_shell', 'su_attempted', 'num_root', 'num_file_creations', 'num_shells', 'num_access_files', 'num_outbound_cmds', 'is_host_login', 'is_guest_login', 'count', 'srv_count', 'serror_rate', 'srv_serror_rate', 'rerror_rate', 'srv_rerror_rate', 'same_srv_rate', 'diff_srv_rate', 'srv_diff_host_rate', 'dst_host_count', 'dst_host_srv_count', 'dst_host_same_srv_rate', 'dst_host_diff_srv_rate', 'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate', 'dst_host_serror_rate', 'dst_host_srv_serror_rate', 'dst_host_rerror_rate']
+INFO: === Module 1: DP Aggregates (data-driven sensitivity) ===
+INFO:   flag: GS=1.095e+04 LS=1.095e+04 mean=4.557e+04
+INFO:   src_bytes: GS=1.04e+04 LS=1.04e+04 mean=1.978e+04
+INFO:   dst_bytes: GS=7.938e-06 LS=7.937e-06 mean=0.0001985
+INFO:   land: GS=2.381e-05 LS=2.363e-05 mean=0.02269
+INFO:   wrong_fragment: GS=2.381e-05 LS=2.381e-05 mean=0.0001111
+INFO:   urgent: GS=0.0006112 LS=0.0006096 mean=0.2044
+INFO:   hot: GS=3.969e-05 LS=3.968e-05 mean=0.001222
+INFO:   num_failed_logins: GS=7.938e-06 LS=4.797e-06 mean=0.3957
+INFO: Saved results/aggregate_results.csv
+INFO: Saved results/sensitivity_report.csv
+INFO: === Module 2: RDP Composition Analysis ===
+INFO: Saved results/rdp_composition.csv
+INFO: === Module 3: Privacy Amplification by Subsampling ===
+INFO: Saved results/amplification_results.csv
+INFO: === Module 4: Membership Inference Attacks ===
+INFO: Saved results/mia_results.csv
+INFO: === Module 5: Local DP vs. Central DP ===
+INFO: Saved results/ldp_results.csv
+INFO: Saved results/central_dp_results.csv
+INFO: === Module 10: Clipped Sensitivity Analysis ===
+INFO:   flag: noise_reduction@p99=25301.9×
+INFO:   src_bytes: noise_reduction@p99=51331.8×
+INFO:   dst_bytes: noise_reduction@p99=79382.1×
+INFO:   land: noise_reduction@p99=238146.3×
+INFO:   wrong_fragment: noise_reduction@p99=238146.3×
+INFO:   urgent: noise_reduction@p99=25.7×
+INFO:   hot: noise_reduction@p99=396910.4×
+INFO:   num_failed_logins: noise_reduction@p99=1.0×
+INFO:   logged_in: noise_reduction@p99=7479.0×
+INFO:   num_compromised: noise_reduction@p99=79382.1×
+INFO:   root_shell: noise_reduction@p99=158764.2×
+INFO:   su_attempted: noise_reduction@p99=592825446.7×
+INFO:   num_root: noise_reduction@p99=3413429.9×
+INFO:   num_file_creations: noise_reduction@p99=158764.2×
+INFO:   num_shells: noise_reduction@p99=714438.8×
+INFO:   num_access_files: noise_reduction@p99=0.0×
+INFO:   num_outbound_cmds: noise_reduction@p99=79382.1×
+INFO:   is_host_login: noise_reduction@p99=79382.1×
+INFO:   is_guest_login: noise_reduction@p99=1.0×
+INFO:   count: noise_reduction@p99=1.0×
+INFO:   srv_count: noise_reduction@p99=1.0×
+INFO:   serror_rate: noise_reduction@p99=1.0×
+INFO:   srv_serror_rate: noise_reduction@p99=1.0×
+INFO:   rerror_rate: noise_reduction@p99=1.0×
+INFO:   srv_rerror_rate: noise_reduction@p99=1.0×
+INFO:   same_srv_rate: noise_reduction@p99=1.0×
+INFO:   diff_srv_rate: noise_reduction@p99=1.0×
+INFO:   srv_diff_host_rate: noise_reduction@p99=1.0×
+INFO:   dst_host_count: noise_reduction@p99=1.0×
+INFO:   dst_host_srv_count: noise_reduction@p99=1.0×
+INFO:   dst_host_same_srv_rate: noise_reduction@p99=1.0×
+INFO:   dst_host_diff_srv_rate: noise_reduction@p99=1.0×
+INFO:   dst_host_same_src_port_rate: noise_reduction@p99=1.9×
+INFO:   dst_host_srv_diff_host_rate: noise_reduction@p99=1.0×
+INFO:   dst_host_serror_rate: noise_reduction@p99=1.0×
+INFO:   dst_host_srv_serror_rate: noise_reduction@p99=1.0×
+INFO:   dst_host_rerror_rate: noise_reduction@p99=1.0×
+INFO: Saved results/clipped_sensitivity.csv
+INFO: === Module 6: DP-ML — Binary Intrusion Detection ===
+INFO:   Using label column: "dst_host_srv_rerror_rate"
+INFO:   Train: (14001, 37)  Test: (5999, 37)  Attack rate train=46.70% test=46.71%
+INFO:   laplace: baseline=0.9477  ε=10.0 uniform=0.5429 mi_weighted=0.8849
+INFO:   gaussian: baseline=0.9477  ε=10.0 uniform=0.5429 mi_weighted=0.5329
+INFO: Saved results/dp_ml_results.csv
+INFO: === Module 7: Budget Allocation Comparison ===
+INFO:   Budget comparison: Train=(14001, 37) Test=(5999, 37)
+INFO: Saved results/budget_comparison.csv
+INFO: === Module 8: Multi-Class IDS (5 categories) ===
+INFO:   Multi-class: Train=(14004, 37) classes=[0 1 2 3 4]
+INFO:   Class distribution (train): {'Normal': 7462, 'DoS': 5122, 'Probe': 1298, 'R2L': 117, 'U2R': 5}
+INFO:   laplace/uniform: baseline=0.9438
+INFO:   laplace/mi: baseline=0.9438
+INFO: Saved results/multiclass_results.csv
+INFO: === Module 9: DP-SGD (Abadi et al. 2016) ===
+INFO:   DP-SGD: Train=(14001, 37) Test=(5999, 37)
+INFO:   DP-SGD σ=1.50: ε_actual≈2.509 (α=12.0)
+INFO:   DP-SGD σ=1.50: ε_actual≈2.509 (α=12.0)
+INFO:   DP-SGD σ=1.50: ε_actual≈2.509 (α=12.0)
+INFO:   DP-SGD baseline=0.9477  ε=2.0 acc=0.9459
+INFO: Saved results/dpsgd_results.csv
+INFO: All experiments complete.  Results in: results

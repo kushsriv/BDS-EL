@@ -1,0 +1,5 @@
+epsilon,uniform_accuracy,mi_accuracy,mi_vs_uniform_p,mi_delta_accuracy_pp,variance_accuracy,variance_vs_uniform_p,variance_delta_accuracy_pp,snr_accuracy,snr_vs_uniform_p,snr_delta_accuracy_pp
+0.1,0.5429,0.5329,nan,-0.997,0.5329,nan,-0.997,0.5329,nan,-0.997
+0.5,0.5429,0.5329,nan,-1.0,0.5329,nan,-1.0,0.5329,nan,-1.0
+1.0,0.5429,0.5329,nan,-1.0,0.5329,nan,-1.0,0.5329,nan,-1.0
+2.0,0.5429,0.5329,nan,-1.0,0.5329,nan,-1.0,0.5329,nan,-1.0

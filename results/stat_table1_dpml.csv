@@ -1,0 +1,17 @@
+epsilon,method,accuracy_mean,accuracy_ci95,f1_mean,f1_ci95,accuracy_loss_pct,wilcoxon_p_vs_uniform
+0.1,Input-Uniform,0.5428,0.0001,0.0428,0.0003,45.72,N/A
+0.1,Input-MI-Weighted,0.5329,0.0,0.0,0.0,46.71,N/A
+0.1,DP-SGD,0.928,0.0,0.9238,0.0,7.2,N/A
+0.5,Input-Uniform,0.5429,0.0001,0.0431,0.0003,45.71,N/A
+0.5,Input-MI-Weighted,0.5329,0.0,0.0,0.0,46.71,N/A
+0.5,DP-SGD,0.9445,0.0,0.9404,0.0,5.55,N/A
+1.0,Input-Uniform,0.5429,0.0,0.0432,0.0001,45.71,N/A
+1.0,Input-MI-Weighted,0.5329,0.0,0.0,0.0,46.71,N/A
+1.0,DP-SGD,0.947,0.0,0.9429,0.0,5.3,N/A
+2.0,Input-Uniform,0.5429,0.0,0.0433,0.0,45.71,N/A
+2.0,Input-MI-Weighted,0.5329,0.0,0.0,0.0,46.71,N/A
+2.0,DP-SGD,0.9459,0.0,0.9418,0.0,5.41,N/A
+5.0,Input-Uniform,0.5429,0.0,0.0433,0.0,45.71,N/A
+5.0,Input-MI-Weighted,0.6709,0.2704,0.3713,0.7278,32.91,N/A
+10.0,Input-Uniform,0.5429,0.0,0.0433,0.0,45.71,N/A
+10.0,Input-MI-Weighted,0.7089,0.3449,0.4314,0.8455,29.11,N/A

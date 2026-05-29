@@ -41,6 +41,8 @@ from dp_ml import (prepare_kdd_data, run_dp_ml_experiment,
                    _confidence_interval, wilcoxon_signed_rank)
 from dp_sgd import run_dpsgd_experiment, dp_sgd_privacy_spent
 from weighted_budget import budget_comparison_report
+from prv_accountant import PRVAccountant, run_prv_vs_rdp_experiment
+from statistical_analysis import run_all_tables
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +82,10 @@ def parse_args():
                    help='Skip budget allocation comparison')
     p.add_argument('--skip_dpsgd', action='store_true',
                    help='Skip DP-SGD experiment')
+    p.add_argument('--skip_prv', action='store_true',
+                   help='Skip PRV vs. RDP composition experiment')
+    p.add_argument('--skip_stats', action='store_true',
+                   help='Skip statistical analysis table generation')
     p.add_argument('--no_spark', action='store_true',
                    help='Use pandas instead of Spark (works without a Spark installation)')
     p.add_argument('--max_ml_rows', type=int, default=20000,
@@ -809,6 +815,59 @@ def run_clipped_sensitivity_analysis(df_pandas, features, results_dir):
     return rows
 
 
+def run_prv_module(epsilons, mechanisms, delta, results_dir):
+    """Module 11: PRV accountant vs. RDP — tighter composition bounds."""
+    logging.info('=== Module 11: PRV vs. RDP Composition (Gopi et al. 2021) ===')
+    eps_subset = epsilons[:2]  # first 2 epsilons (PRV is slow for many)
+    k_values = [1, 2, 5, 10, 20, 50, 100]
+    rows = []
+
+    for mech in mechanisms[:1]:  # laplace only for PRV (Gaussian is slower)
+        mech_rows = run_prv_vs_rdp_experiment(
+            epsilons_per_query=eps_subset,
+            k_values=k_values,
+            delta=delta,
+            mechanism=mech,
+            grid_size=2048,
+            epsilon_max=max(epsilons) * len(k_values) + 5.0,
+        )
+        for r in mech_rows:
+            r['mechanism'] = mech
+            prv = r['prv_epsilon']
+            rdp = r['rdp_epsilon']
+            logging.info(
+                f'  k={r["n_queries"]:3d}  ε₀={r["per_query_epsilon"]}  '
+                f'RDP={rdp:.3f}  PRV={prv:.3f}  '
+                f'tighter={r["prv_tightening_pct"]:.1f}%'
+            )
+        rows.extend(mech_rows)
+
+    save_csv(rows, os.path.join(results_dir, 'prv_composition.csv'))
+
+    # Plot
+    if rows:
+        k_vals = sorted(set(r['n_queries'] for r in rows))
+        eps0 = rows[0]['per_query_epsilon']
+        subset = [r for r in rows if r['per_query_epsilon'] == eps0]
+        prv_vals = [r['prv_epsilon'] for r in subset if r['n_queries'] in k_vals]
+        rdp_vals = [r['rdp_epsilon'] for r in subset if r['n_queries'] in k_vals]
+        basic_vals = [r['basic_epsilon'] for r in subset if r['n_queries'] in k_vals]
+        k_plot = [r['n_queries'] for r in subset if r['n_queries'] in k_vals]
+
+        fig, ax = plt.subplots(figsize=(7, 4))
+        ax.semilogy(k_plot, basic_vals, 'o-', label='Basic composition')
+        ax.semilogy(k_plot, rdp_vals, 's-', label='RDP (Mironov 2017)')
+        ax.semilogy(k_plot, prv_vals, '^-', color='green', label='PRV (Gopi et al. 2021)')
+        ax.set_xlabel('Number of queries k', fontsize=12)
+        ax.set_ylabel('Total ε (log scale)', fontsize=12)
+        ax.set_title(f'Composition Bounds: PRV vs. RDP (ε₀={eps0}, δ={delta})', fontsize=12)
+        ax.legend(fontsize=10)
+        ax.grid(True, alpha=0.3)
+        _save_fig(os.path.join(results_dir, 'prv_vs_rdp.png'))
+
+    return rows
+
+
 def main():
     args = parse_args()
     setup_logging(args.log)
@@ -899,6 +958,13 @@ def main():
             df_pandas, features, label_col, eps, delta,
             args.max_ml_rows, args.ml_runs, args.results_dir
         )
+
+    if not args.skip_prv:
+        run_prv_module(eps, mechs, delta, args.results_dir)
+
+    if not args.skip_stats:
+        logging.info('=== Statistical Analysis Tables ===')
+        run_all_tables(args.results_dir)
 
     if spark is not None:
         spark.stop()
