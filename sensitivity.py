@@ -113,15 +113,64 @@ def compute_smooth_sensitivity(data, beta, query='mean', k_max=None):
         return gs
 
 
+def compute_clipped_sensitivity(data, query='mean', clip_percentile=99.0):
+    """
+    Sensitivity calibrated to the p-th percentile rather than the raw max.
+
+    For heavy-tailed features (e.g. network byte counts), the raw range can
+    be millions while 99% of values are much smaller.  Clipping at the p-th
+    percentile reduces sensitivity — and therefore noise — by orders of
+    magnitude, at the cost of a small, bounded bias.
+
+    Privacy: after clipping each x_i to [min, threshold], any adjacent DB
+    differs in one clipped value by at most (threshold − min).
+    So GS_clip = (threshold − min) / n for mean queries is valid.
+
+    Bias bound: |clipped_mean − true_mean| ≤ frac_above · (max − threshold) / n.
+    """
+    data = np.asarray(data, dtype=float)
+    data = data[~np.isnan(data)]
+    n = len(data)
+    if n == 0:
+        return {
+            'gs_clipped': 1.0, 'gs_raw': 1.0,
+            'clip_threshold': 0.0, 'bias_bound': 0.0, 'noise_reduction': 1.0,
+        }
+
+    lo = float(np.min(data))
+    hi = float(np.max(data))
+    threshold = float(np.percentile(data, clip_percentile))
+    threshold = max(threshold, lo + 1e-10)
+
+    gs_raw = (hi - lo) / n if query == 'mean' else (hi - lo)
+    gs_clip = (threshold - lo) / n if query == 'mean' else (threshold - lo)
+    gs_clip = max(gs_clip, 1e-10)
+
+    frac_above = float(np.mean(data > threshold))
+    bias_bound = frac_above * (hi - threshold) / n if query == 'mean' else frac_above * (hi - threshold)
+
+    return {
+        'gs_clipped': float(gs_clip),
+        'gs_raw': float(gs_raw),
+        'clip_threshold': float(threshold),
+        'bias_bound': float(bias_bound),
+        'noise_reduction': float(gs_raw / gs_clip),
+    }
+
+
 def sensitivity_report(data, query='mean'):
-    """Return a summary dict of GS, LS and SS for a feature."""
+    """Return a summary dict of GS, LS, SS, and clipped sensitivity for a feature."""
     gs = compute_global_sensitivity(data, query)
     ls = compute_local_sensitivity(data, query)
     beta = 0.01
     ss = compute_smooth_sensitivity(data, beta, query)
+    cs = compute_clipped_sensitivity(data, query, clip_percentile=99.0)
     return {
         'global_sensitivity': gs,
         'local_sensitivity': ls,
         f'smooth_sensitivity_beta{beta}': ss,
         'ls_gs_ratio': ls / gs if gs > 0 else 0.0,
+        'gs_clipped_p99': cs['gs_clipped'],
+        'clip_noise_reduction': cs['noise_reduction'],
+        'clip_bias_bound': cs['bias_bound'],
     }

@@ -1,0 +1,5 @@
+clip_percentile,n_features,min_reduction,median_reduction,max_reduction,features_over_1000x,features_over_10x,features_unchanged
+90.0,36,1.0,13.5,593698649.7,16,19,12
+95.0,36,1.0,3.3,593698649.7,16,16,15
+99.0,36,1.0,1.0,592825446.7,15,16,18
+99.5,36,1.0,1.0,3413429.9,13,13,22

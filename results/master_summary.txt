@@ -1,0 +1,28 @@
+======================================================================
+DIFFERENTIAL PRIVACY FOR IDS — KEY RESULTS SUMMARY
+Dataset: NSL-KDD (125,973 records, 37 features)
+======================================================================
+
+Binary Classification (Normal vs. Attack):
+  Baseline (no DP): 0.9477 accuracy
+       ε     Input-Uniform        Input-MI        DP-SGD
+     0.1     0.5428±0.0001   0.5329±0.0000  0.9280±0.0000
+     0.5     0.5429±0.0000   0.5329±0.0000  0.9445±0.0000
+     1.0     0.5429±0.0000   0.5329±0.0000  0.9470±0.0000
+     2.0     0.5429±0.0000   0.5329±0.0000  0.9459±0.0000
+     5.0     0.5429±0.0000   0.6709±0.1912           N/A
+    10.0     0.5429±0.0000   0.7089±0.2439           N/A
+
+Clipped Sensitivity (99th percentile):
+  Median noise reduction: 1.0×
+  Max noise reduction: 592825447× (su_attempted)
+  Features with >1000× reduction: 15/37
+
+Composition (k=100, ε₀=0.1, Laplace):
+  Basic: 10.000, RDP: 5.076  (1.97× tighter)
+
+Membership Inference Attacks:
+  24 attack configurations tested
+  DP bound violations: 0/24 (0 = VALID guarantee)
+
+======================================================================
