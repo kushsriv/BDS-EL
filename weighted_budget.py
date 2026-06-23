@@ -9,26 +9,32 @@ This module proposes allocating the budget proportionally to feature
 importance, which provably preserves the same total DP guarantee while
 concentrating noise reduction on the features that matter most.
 
-Privacy Guarantee
------------------
-By basic composition (Dwork 2006), if mechanism M_j adds ε_j-DP noise
-to feature j, then the joint mechanism satisfies (Σ ε_j)-DP.
-Since Σ w_j = 1 by construction, Σ ε_j = ε_total · Σ w_j = ε_total.
-The allocation is always ε_total-DP regardless of the weights chosen.
+Privacy Guarantee (Formal)
+--------------------------
+Theorem (Basic Composition, Dwork & Roth 2014, Theorem 3.14):
+  If mechanism M_j is ε_j-DP for feature j, then the joint mechanism
+  (M_1, ..., M_d) applied independently to each feature is (Σ ε_j)-DP.
+
+  Since Σ w_j = 1 by construction, Σ ε_j = ε_total · Σ w_j = ε_total.
+  Therefore the allocation is ε_total-DP for ANY weight vector w.  □
 
 Allocation Strategies
 ---------------------
-1. MI-weighted   : w_j ∝ I(X_j; Y)  — mutual information with labels
-                   Features more informative about the class receive
-                   more budget → less noise → better model.
+1. MI-weighted   : w_j ∝ I(X_j; Y)  — mutual information with labels.
+                   Features more informative about the attack class receive
+                   more budget → less noise → better learning signal.
+                   This is an empirically motivated heuristic; no formal
+                   optimality claim is made beyond the DP guarantee above.
 
-2. Var-weighted  : w_j ∝ Var(X_j)  — variance of each feature
-                   High-variance features dominate gradient signal;
-                   preserving their scale improves convergence.
+2. Var-weighted  : w_j ∝ Var(X_j)  — variance of each feature.
+                   High-variance features carry more signal; giving them
+                   more budget helps preserve their scale.
+                   Empirical heuristic; no formal optimality claim.
 
-3. SNR-optimal   : w_j ∝ σ_j / GS_j
-                   Maximises Σ (σ_j ε_j / GS_j) (total post-noise SNR)
-                   subject to Σ ε_j = ε_total.  Derived via Cauchy-Schwarz.
+3. SNR-heuristic : w_j ∝ std(X_j) / GS_j
+                   Attempts to balance feature signal (std) against the
+                   sensitivity cost (GS).  This is a heuristic weighting
+                   — it is NOT claimed to be optimal in a formal sense.
 
 4. Uniform       : w_j = 1/d  (baseline, current standard approach)
 
@@ -36,17 +42,19 @@ Clipped Sensitivity
 -------------------
 For heavy-tailed features (e.g. src_bytes, max ≈ 1.3 × 10⁹), GS = (max − min)/n
 can be enormous.  We propose clipping at the p-th percentile before computing
-sensitivity:
+sensitivity (see sensitivity.py for formal Lemma 1 and Lemma 2):
 
-    GS_clip(X_j, p) = (quantile_p(X_j) − min(X_j)) / n
+    GS_clip(X_j, p) = (quantile_p(X_j) − min(X_j)) / n    [mean query]
 
-Proof of validity: after clipping each value to [min, quantile_p], any adjacent
-database differs in one clipped record by at most (quantile_p − min).
-The clipped mean is a valid, useful query; the Laplace mechanism calibrated to
-GS_clip is ε-DP for the clipped mean.
+DP validity: after clipping each x_i to [min, τ], adjacent databases
+differ by at most (τ − min)/n → Laplace(0, GS_clip/ε) is ε-DP.
 
-Bias bound: |clipped_mean − true_mean| ≤ (1 − p) · (max − quantile_p) / n.
-At p = 0.99 on NSL-KDD src_bytes this is < 5% of the true mean.
+Bias bound (Lemma 2 from sensitivity.py):
+    |clipped_mean − true_mean| ≤ frac_above × (max − quantile_p)
+    where frac_above = fraction of values above the threshold.
+
+Note: the threshold τ = quantile_p(X_j) is treated as a publicly known
+parameter (determined from domain knowledge or auxiliary public data).
 """
 
 import numpy as np
@@ -108,48 +116,64 @@ def clipped_sensitivity(data, query='mean', clip_percentile=99.0):
     """
     Compute sensitivity after clipping values at the p-th percentile.
 
+    Formal guarantees (proofs in sensitivity.py module docstring):
+      Lemma 1 — DP validity : GS_clip = (τ − lo) / n  is a valid sensitivity
+                               for the clipped mean.  Laplace(0, GS_clip/ε) ⇒ ε-DP.
+      Lemma 2 — Bias bound  : |clipped_mean − true_mean| ≤ frac_above × (hi − τ)
+                               (NOT divided by n — see derivation in sensitivity.py)
+
     Parameters
     ----------
     data            : 1-D array of feature values
     query           : 'mean' or 'sum'
-    clip_percentile : p ∈ [50, 100];  default 99th
+    clip_percentile : p ∈ (0, 100];  default 99th
 
     Returns
     -------
     dict with keys:
-      clip_threshold   : the percentile value used as upper clip
+      clip_threshold   : τ — the percentile value used as upper clip
       gs_raw           : global sensitivity without clipping
-      gs_clipped       : global sensitivity after clipping (smaller)
-      bias_bound       : |clipped_mean − true_mean| worst-case upper bound
-      noise_reduction  : gs_raw / gs_clipped  (e.g. 10× means 10× less noise)
+      gs_clipped       : global sensitivity after clipping (Lemma 1)
+      bias_bound       : worst-case |clipped_f − true_f| (Lemma 2)
+      relative_bias_pct: bias_bound / |true_mean| × 100 (for reporting)
+      noise_reduction  : gs_raw / gs_clipped (e.g. 1000 = 1000× less noise)
     """
     data = np.asarray(data, dtype=float)
     data = data[~np.isnan(data)]
     n = len(data)
     if n == 0:
         return {'clip_threshold': 0.0, 'gs_raw': 1.0, 'gs_clipped': 1.0,
-                'bias_bound': 0.0, 'noise_reduction': 1.0}
+                'bias_bound': 0.0, 'relative_bias_pct': 0.0, 'noise_reduction': 1.0}
 
     lo = float(np.min(data))
     hi = float(np.max(data))
     threshold = float(np.percentile(data, clip_percentile))
-    threshold = max(threshold, lo + 1e-10)  # avoid zero range
+    threshold = max(threshold, lo + 1e-10)
 
-    gs_raw = (hi - lo) / n if query == 'mean' else (hi - lo)
+    gs_raw  = (hi - lo) / n if query == 'mean' else (hi - lo)
     gs_clip = (threshold - lo) / n if query == 'mean' else (threshold - lo)
     gs_clip = max(gs_clip, 1e-10)
 
-    # Bias from clipping: records above threshold get clipped to threshold
     frac_above = float(np.mean(data > threshold))
     max_clipping = hi - threshold
-    bias_bound = frac_above * max_clipping / n if query == 'mean' else frac_above * max_clipping
+
+    # Lemma 2 (sensitivity.py): bias for mean  = frac_above × (hi − τ)
+    #                            bias for sum   = frac_above × n × (hi − τ)
+    if query == 'mean':
+        bias_bound = frac_above * max_clipping
+    else:
+        bias_bound = frac_above * n * max_clipping
+
+    true_mean = float(np.mean(data))
+    relative_bias_pct = (bias_bound / abs(true_mean) * 100.0) if abs(true_mean) > 1e-12 else 0.0
 
     return {
-        'clip_threshold': threshold,
-        'gs_raw': float(gs_raw),
-        'gs_clipped': float(gs_clip),
-        'bias_bound': float(bias_bound),
-        'noise_reduction': float(gs_raw / gs_clip),
+        'clip_threshold':    threshold,
+        'gs_raw':            float(gs_raw),
+        'gs_clipped':        float(gs_clip),
+        'bias_bound':        float(bias_bound),
+        'relative_bias_pct': float(relative_bias_pct),
+        'noise_reduction':   float(gs_raw / gs_clip),
     }
 
 
@@ -191,7 +215,7 @@ def compute_feature_importance(X, y, method='mi', n_bins=20):
         raw = np.array([np.nanvar(X[:, j]) for j in range(d)])
 
     elif method == 'snr':
-        # w_j ∝ std(X_j) / GS_j  → maximises post-noise SNR by Cauchy-Schwarz
+        # w_j ∝ std(X_j) / GS_j  — heuristic balancing feature spread vs. sensitivity cost
         raw = np.zeros(d)
         for j in range(d):
             col = X[:, j]

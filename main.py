@@ -790,6 +790,7 @@ def run_clipped_sensitivity_analysis(df_pandas, features, results_dir):
                 'gs_clipped': cs['gs_clipped'],
                 'clip_threshold': cs['clip_threshold'],
                 'bias_bound': cs['bias_bound'],
+                'relative_bias_pct': cs['relative_bias_pct'],
                 'noise_reduction': cs['noise_reduction'],
             })
         if rows:
