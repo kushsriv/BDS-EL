@@ -9,6 +9,7 @@ import {
   generateAggregateData, generateSensitivityData, generateCompositionData,
   generateAmplificationData, generateMIAData, generateLDPData, generateMLData,
   generateDPSGDData, generatePRVData, generateClippedSensData, generateMulticlassData,
+  generateCrossDatasetData,
   FEATURES, EPSILONS, compositionBounds
 } from './dpmath.js'
 
@@ -825,6 +826,106 @@ function MulticlassSection() {
 }
 
 // =====================================================================
+// SECTION 12 — Cross-Dataset Validation
+// =====================================================================
+function CrossDatasetSection() {
+  const { datasets, accuracyComparison, collapseByEps, dpSGDByEps } = generateCrossDatasetData()
+
+  return (
+    <Section id="s12" num={12} title="Cross-Dataset Validation — NSL-KDD vs UNSW-NB15"
+      sub="Budget collapse and DP-SGD recovery confirmed on two independent benchmark datasets. UNSW-NB15 adds 10 attack categories, 39 numeric features, and 82,332 records.">
+
+      {/* Dataset overview cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+        {datasets.map(d => (
+          <div key={d.name} className="chart-card" style={{ borderLeft: `3px solid ${d.color}` }}>
+            <div className="chart-card-title" style={{ color: d.color }}>{d.name}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 8 }}>
+              {[
+                { label: 'Records', val: d.rows.toLocaleString() },
+                { label: 'Features', val: d.features },
+                { label: 'Classes', val: d.classes },
+              ].map(item => (
+                <div key={item.label} style={{ textAlign: 'center' }}>
+                  <div className="mono" style={{ fontSize: 18, fontWeight: 700, color: d.color }}>{item.val}</div>
+                  <div style={{ fontSize: 11, color: 'var(--txt3)' }}>{item.label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+              {[
+                { label: 'No-DP', val: `${(d.baseline * 100).toFixed(1)}%`, color: C.blue },
+                { label: 'Input Perturb', val: `${(d.inputPerturbation * 100).toFixed(1)}%`, color: C.red },
+                { label: 'DP-SGD', val: `${(d.dpSGD * 100).toFixed(1)}%`, color: C.green },
+              ].map(item => (
+                <div key={item.label} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: '6px 4px', textAlign: 'center' }}>
+                  <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: item.color }}>{item.val}</div>
+                  <div style={{ fontSize: 10, color: 'var(--txt3)' }}>{item.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="split">
+        {/* Grouped bar: method comparison across datasets */}
+        <ChartCard title="Accuracy by Method — both datasets (ε = 1.0)"
+          note="Budget collapse (37–39 features) is dataset-independent. DP-SGD recovers near-baseline on both.">
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={accuracyComparison} margin={{ top: 8, right: 20, left: 0, bottom: 16 }}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="method" tick={{ ...tick, fontSize: 10 }} />
+              <YAxis domain={[0, 105]} tick={tick} tickFormatter={v => `${v}%`} width={46} />
+              <Tooltip content={<Tip xLabel="Method" fmt={v => `${v?.toFixed(1)}%`} />} />
+              <Legend wrapperStyle={{ fontSize: 11, color: C.txt2, fontFamily: 'monospace' }} />
+              <Bar dataKey="NSL-KDD"   name="NSL-KDD"    fill={C.blue}  fillOpacity={0.85} radius={[3,3,0,0]} />
+              <Bar dataKey="UNSW-NB15" name="UNSW-NB15"  fill={C.green} fillOpacity={0.85} radius={[3,3,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        {/* DP-SGD recovery across ε values */}
+        <ChartCard title="DP-SGD Recovery vs ε — both datasets"
+          note="Both datasets maintain ≥90% accuracy for ε ≥ 0.5 with DP-SGD.">
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={dpSGDByEps} margin={{ top: 8, right: 20, left: 0, bottom: 8 }}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="eps" tickFormatter={v => `ε=${v}`} tick={tick} />
+              <YAxis domain={[88, 97]} tick={tick} tickFormatter={v => `${v}%`} width={46} />
+              <Tooltip content={<Tip xLabel="ε" fmt={v => `${v?.toFixed(2)}%`} />} />
+              <Legend wrapperStyle={{ fontSize: 11, color: C.txt2, fontFamily: 'monospace' }} />
+              <Line dataKey="nslkdd" name="NSL-KDD"   stroke={C.blue}  strokeWidth={2} dot={{ r: 4 }} />
+              <Line dataKey="unsw"   name="UNSW-NB15" stroke={C.green} strokeWidth={2} dot={{ r: 4 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      </div>
+
+      <div className="insight-stack" style={{ marginTop: 16 }}>
+        <Insight label="Budget Collapse — Universal" color="red">
+          Input perturbation collapses to majority-class prediction on{' '}
+          <span className="insight-highlight">both</span> NSL-KDD (37 features, 53.3%) and
+          UNSW-NB15 (39 features, 55.0%) at all tested ε values.
+          This confirms the collapse is an artifact of per-feature budget splitting, not dataset-specific.
+        </Insight>
+        <Insight label="DP-SGD — Dataset-Agnostic Fix" color="green">
+          DP-SGD bypasses per-feature splitting by clipping{' '}
+          <span className="insight-highlight">full gradient vectors</span>.
+          NSL-KDD: 94.70% (vs. 94.77% baseline). UNSW-NB15: 90.22% (vs. 92.27% baseline).
+          Both within 2.1 pp of non-private accuracy at ε = 1.0.
+        </Insight>
+        <Insight label="UNSW-NB15 Details" color="blue">
+          10 attack categories (Generic, Exploits, Fuzzers, DoS, Reconnaissance, Analysis, Backdoors,
+          Shellcode, Worms) with 82,332 rows. Categorical columns (proto, service, state) dropped;
+          39 numeric features used — same DP pipeline, no code changes required.
+        </Insight>
+      </div>
+    </Section>
+  )
+}
+
+// =====================================================================
 // NAV + HERO
 // =====================================================================
 const NAV_ITEMS = [
@@ -839,6 +940,7 @@ const NAV_ITEMS = [
   { id: 's9',  label: 'Clipped Sens.' },
   { id: 's10', label: 'PRV' },
   { id: 's11', label: 'Multi-class' },
+  { id: 's12', label: 'Cross-Dataset' },
 ]
 
 const PRESET_EPS = [0.1, 0.3, 0.5, 1.0, 2.0, 5.0]
@@ -865,20 +967,21 @@ function Counter({ target, suffix = '' }) {
 function HeroSection({ eps, setEps }) {
   return (
     <div className="hero">
-      <div className="hero-eyebrow">BDS-EL · NSL-KDD Privacy Research</div>
+      <div className="hero-eyebrow">BDS-EL · NSL-KDD &amp; UNSW-NB15 Privacy Research</div>
       <h1 className="hero-title">Differential Privacy<br />Research Dashboard</h1>
       <p className="hero-sub">
-        Empirical privacy–utility analysis across 11 experiment modules:
+        Empirical privacy–utility analysis across 12 experiment modules on 2 benchmark datasets:
         data-driven sensitivity, PRV/RDP composition, subsampling amplification,
         membership inference attacks, local DP, DP-SGD, clipped sensitivity,
-        and multi-class intrusion detection on NSL-KDD (37 features).
+        multi-class intrusion detection, and cross-dataset validation
+        (NSL-KDD 37 features · UNSW-NB15 39 features).
       </p>
 
       <div className="stats-row">
         {[
-          { num: 125974, suf: '',    label: 'Network records',   color: 'blue'   },
-          { num: 37,     suf: '',    label: 'Features analysed', color: 'purple' },
-          { num: 11,     suf: '',    label: 'Experiment modules', color: 'cyan'  },
+          { num: 208306, suf: '',    label: 'Total records (2 datasets)', color: 'blue'   },
+          { num: 39,     suf: '',    label: 'Max features analysed', color: 'purple' },
+          { num: 12,     suf: '',    label: 'Experiment modules', color: 'cyan'  },
           { num: 30,     suf: ' runs', label: 'Statistical runs', color: 'green'  },
         ].map(s => (
           <div key={s.label} className={`stat-card ${s.color}`}>
@@ -959,6 +1062,7 @@ export default function App() {
       <ClippedSensSection />
       <PRVSection />
       <MulticlassSection />
+      <CrossDatasetSection />
 
       {/* ── Footer ─────────────────────────────────── */}
       <footer style={{ borderTop: '1px solid var(--border)', padding: '48px 32px', maxWidth: 1400, margin: '0 auto' }}>
@@ -974,11 +1078,12 @@ export default function App() {
             </div>
             <p style={{ fontSize: 12, color: 'var(--txt3)', lineHeight: 1.6 }}>
               Full pipeline: DP-SGD, clipped sensitivity, PRV accountant, budget comparison,
-              multi-class IDS, statistical tables. 11 modules, 30-run CIs.
+              multi-class IDS, cross-dataset validation. 12 modules, 30-run CIs, 2 datasets.
             </p>
           </div>
           <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--txt3)', lineHeight: 1.7 }}>
             <div>NSL-KDD · 125,974 records · 37 features</div>
+            <div>UNSW-NB15 · 82,332 records · 39 features</div>
             <div>Laplace · Gaussian · DP-SGD · PRV · Clipped-GS</div>
             <div>Target: IEEE TIFS · TDSC · USENIX Security</div>
             <div style={{ color: 'var(--txt3)', marginTop: 6, fontFamily: 'var(--mono)', fontSize: 10 }}>BDS-EL Research Framework v2</div>

@@ -43,6 +43,7 @@ from dp_sgd import run_dpsgd_experiment, dp_sgd_privacy_spent
 from weighted_budget import budget_comparison_report
 from prv_accountant import PRVAccountant, run_prv_vs_rdp_experiment
 from statistical_analysis import run_all_tables
+from multi_dataset import load_dataset, detect_dataset_type
 
 
 # ---------------------------------------------------------------------------
@@ -876,7 +877,19 @@ def main():
 
     use_spark = SPARK_AVAILABLE and not args.no_spark
 
-    if use_spark:
+    # Auto-detect dataset type and use appropriate loader
+    dataset_type = detect_dataset_type(args.dataset)
+    logging.info(f'Detected dataset type: {dataset_type}')
+
+    if dataset_type != 'NSL-KDD' and os.path.exists(args.dataset):
+        # Use multi_dataset loader for UNSW-NB15, CIC-IDS-2017, etc.
+        logging.info(f'Using multi_dataset loader for {dataset_type}')
+        df_pandas, label_col, dataset_info = load_dataset(args.dataset)
+        logging.info(f'Dataset: {dataset_info["dataset"]} — '
+                     f'{dataset_info["n_rows"]:,} rows, {dataset_info["n_cols"]} cols')
+        spark = None
+        df_spark = None
+    elif use_spark:
         spark = SparkSession.builder \
             .appName('DP-Research-Framework') \
             .config('spark.driver.memory', '4g') \
@@ -885,6 +898,7 @@ def main():
         logging.info(f'Loading dataset via Spark: {args.dataset}')
         df_spark = spark.read.csv(args.dataset, header=True, inferSchema=True)
         df_pandas = df_spark.toPandas()
+        label_col = detect_label_column(df_pandas)
     else:
         spark = None
         df_spark = None
@@ -894,12 +908,10 @@ def main():
             logging.info('--no_spark flag set — running in pandas-only mode.')
         logging.info(f'Loading dataset via pandas: {args.dataset}')
         df_pandas = pd.read_csv(args.dataset)
+        label_col = detect_label_column(df_pandas)
 
     logging.info(f'Dataset shape: {df_pandas.shape}')
-
-    # Detect label column first (so we can exclude it from features)
-    label_col = detect_label_column(df_pandas)
-    logging.info(f'Detected label column: {label_col}')
+    logging.info(f'Using label column: {label_col}')
 
     # Feature selection: auto-detect all numerical columns if not specified
     if args.features:
