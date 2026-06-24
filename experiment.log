@@ -619,3 +619,108 @@
 2026-06-01 16:20:40,065 INFO:   gaussian: baseline=0.9540  ε=5.0 uniform=0.5330 mi_weighted=0.5317
 2026-06-01 16:20:40,066 INFO: Saved results/dp_ml_results.csv
 2026-06-01 16:20:40,345 INFO: All experiments complete.  Results in: results
+2026-06-24 14:28:55,852 INFO: Detected dataset type: NSL-KDD
+2026-06-24 14:28:55,853 INFO: PySpark not installed — running in pandas-only mode.
+2026-06-24 14:28:55,853 INFO: Loading dataset via pandas: KDDTrain+.csv
+2026-06-24 14:28:56,943 INFO: Dataset shape: (125973, 43)
+2026-06-24 14:28:56,943 INFO: Using label column: dst_host_srv_rerror_rate
+2026-06-24 14:28:57,095 INFO: Auto-detected 37 numerical features
+2026-06-24 14:28:57,106 INFO: Using 37 features: ['flag', 'src_bytes', 'dst_bytes', 'land', 'wrong_fragment', 'urgent', 'hot', 'num_failed_logins', 'logged_in', 'num_compromised', 'root_shell', 'su_attempted', 'num_root', 'num_file_creations', 'num_shells', 'num_access_files', 'num_outbound_cmds', 'is_host_login', 'is_guest_login', 'count', 'srv_count', 'serror_rate', 'srv_serror_rate', 'rerror_rate', 'srv_rerror_rate', 'same_srv_rate', 'diff_srv_rate', 'srv_diff_host_rate', 'dst_host_count', 'dst_host_srv_count', 'dst_host_same_srv_rate', 'dst_host_diff_srv_rate', 'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate', 'dst_host_serror_rate', 'dst_host_srv_serror_rate', 'dst_host_rerror_rate']
+2026-06-24 14:28:57,107 INFO: === Module 1: DP Aggregates (data-driven sensitivity) ===
+2026-06-24 14:28:57,114 INFO:   flag: GS=1.095e+04 LS=1.095e+04 mean=4.557e+04
+2026-06-24 14:28:59,322 INFO:   src_bytes: GS=1.04e+04 LS=1.04e+04 mean=1.978e+04
+2026-06-24 14:29:01,325 INFO:   dst_bytes: GS=7.938e-06 LS=7.937e-06 mean=0.0001985
+2026-06-24 14:29:03,382 INFO:   land: GS=2.381e-05 LS=2.363e-05 mean=0.02269
+2026-06-24 14:29:05,381 INFO:   wrong_fragment: GS=2.381e-05 LS=2.381e-05 mean=0.0001111
+2026-06-24 14:29:07,422 INFO:   urgent: GS=0.0006112 LS=0.0006096 mean=0.2044
+2026-06-24 14:29:09,446 INFO:   hot: GS=3.969e-05 LS=3.968e-05 mean=0.001222
+2026-06-24 14:29:11,478 INFO:   num_failed_logins: GS=7.938e-06 LS=4.797e-06 mean=0.3957
+2026-06-24 14:29:13,565 INFO: Saved results/aggregate_results.csv
+2026-06-24 14:29:13,566 INFO: Saved results/sensitivity_report.csv
+2026-06-24 14:29:13,707 INFO: === Module 2: RDP Composition Analysis ===
+2026-06-24 14:29:13,716 INFO: Saved results/rdp_composition.csv
+2026-06-24 14:29:14,224 INFO: === Module 3: Privacy Amplification by Subsampling ===
+2026-06-24 14:29:14,225 INFO: Saved results/amplification_results.csv
+2026-06-24 14:29:14,389 INFO: === Module 4: Membership Inference Attacks ===
+2026-06-24 14:29:14,947 INFO: Saved results/mia_results.csv
+2026-06-24 14:29:14,947 INFO: === Module 5: Local DP vs. Central DP ===
+2026-06-24 14:29:27,666 INFO: Saved results/ldp_results.csv
+2026-06-24 14:29:27,667 INFO: Saved results/central_dp_results.csv
+2026-06-24 14:29:27,667 INFO: === Module 10: Clipped Sensitivity Analysis ===
+2026-06-24 14:29:27,677 INFO:   flag: noise_reduction@p99=25301.9×
+2026-06-24 14:29:27,687 INFO:   src_bytes: noise_reduction@p99=51331.8×
+2026-06-24 14:29:27,692 INFO:   dst_bytes: noise_reduction@p99=79382.1×
+2026-06-24 14:29:27,697 INFO:   land: noise_reduction@p99=238146.3×
+2026-06-24 14:29:27,702 INFO:   wrong_fragment: noise_reduction@p99=238146.3×
+2026-06-24 14:29:27,707 INFO:   urgent: noise_reduction@p99=25.7×
+2026-06-24 14:29:27,712 INFO:   hot: noise_reduction@p99=396910.4×
+2026-06-24 14:29:27,719 INFO:   num_failed_logins: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,724 INFO:   logged_in: noise_reduction@p99=7479.0×
+2026-06-24 14:29:27,729 INFO:   num_compromised: noise_reduction@p99=79382.1×
+2026-06-24 14:29:27,733 INFO:   root_shell: noise_reduction@p99=158764.2×
+2026-06-24 14:29:27,738 INFO:   su_attempted: noise_reduction@p99=592825446.7×
+2026-06-24 14:29:27,743 INFO:   num_root: noise_reduction@p99=3413429.9×
+2026-06-24 14:29:27,748 INFO:   num_file_creations: noise_reduction@p99=158764.2×
+2026-06-24 14:29:27,753 INFO:   num_shells: noise_reduction@p99=714438.8×
+2026-06-24 14:29:27,757 INFO:   num_access_files: noise_reduction@p99=0.0×
+2026-06-24 14:29:27,762 INFO:   num_outbound_cmds: noise_reduction@p99=79382.1×
+2026-06-24 14:29:27,767 INFO:   is_host_login: noise_reduction@p99=79382.1×
+2026-06-24 14:29:27,776 INFO:   is_guest_login: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,784 INFO:   count: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,791 INFO:   srv_count: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,798 INFO:   serror_rate: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,803 INFO:   srv_serror_rate: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,810 INFO:   rerror_rate: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,816 INFO:   srv_rerror_rate: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,823 INFO:   same_srv_rate: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,831 INFO:   diff_srv_rate: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,837 INFO:   srv_diff_host_rate: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,845 INFO:   dst_host_count: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,853 INFO:   dst_host_srv_count: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,861 INFO:   dst_host_same_srv_rate: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,867 INFO:   dst_host_diff_srv_rate: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,875 INFO:   dst_host_same_src_port_rate: noise_reduction@p99=1.9×
+2026-06-24 14:29:27,882 INFO:   dst_host_srv_diff_host_rate: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,889 INFO:   dst_host_serror_rate: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,896 INFO:   dst_host_srv_serror_rate: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,902 INFO:   dst_host_rerror_rate: noise_reduction@p99=1.0×
+2026-06-24 14:29:27,903 INFO: Saved results/clipped_sensitivity.csv
+2026-06-24 14:29:28,337 INFO: === Module 6: DP-ML — Binary Intrusion Detection ===
+2026-06-24 14:29:28,337 INFO:   Using label column: "dst_host_srv_rerror_rate"
+2026-06-24 14:29:29,112 INFO:   Train: (14001, 37)  Test: (5999, 37)  Attack rate train=46.70% test=46.71%
+2026-06-24 14:29:31,957 INFO:   laplace: baseline=0.9477  ε=5.0 uniform=0.5429 mi_weighted=0.8095
+2026-06-24 14:29:34,867 INFO:   gaussian: baseline=0.9477  ε=5.0 uniform=0.5429 mi_weighted=0.5329
+2026-06-24 14:29:34,868 INFO: Saved results/dp_ml_results.csv
+2026-06-24 14:29:35,090 INFO: === Module 7: Budget Allocation Comparison ===
+2026-06-24 14:29:35,358 INFO:   Budget comparison: Train=(14001, 37) Test=(5999, 37)
+2026-06-24 14:29:35,847 INFO: Saved results/budget_comparison.csv
+2026-06-24 14:29:35,958 INFO: === Module 8: Multi-Class IDS (5 categories) ===
+2026-06-24 14:29:36,126 INFO:   Multi-class: Train=(14004, 37) classes=[0 1 2 3 4]
+2026-06-24 14:29:36,126 INFO:   Class distribution (train): {'Normal': 7462, 'DoS': 5122, 'Probe': 1298, 'R2L': 117, 'U2R': 5}
+2026-06-24 14:29:46,176 INFO:   laplace/uniform: baseline=0.9438
+2026-06-24 14:29:56,149 INFO:   laplace/mi: baseline=0.9438
+2026-06-24 14:29:56,149 INFO: Saved results/multiclass_results.csv
+2026-06-24 14:29:56,149 INFO: === Module 9: DP-SGD (Abadi et al. 2016) ===
+2026-06-24 14:29:56,305 INFO:   DP-SGD: Train=(14001, 37) Test=(5999, 37)
+2026-06-24 14:29:56,306 INFO:   DP-SGD σ=1.50: ε_actual≈2.509 (α=12.0)
+2026-06-24 14:29:56,306 INFO:   DP-SGD σ=1.50: ε_actual≈2.509 (α=12.0)
+2026-06-24 14:29:56,306 INFO:   DP-SGD σ=1.50: ε_actual≈2.509 (α=12.0)
+2026-06-24 14:29:58,139 INFO:   DP-SGD baseline=0.9477  ε=1.0 acc=0.9460
+2026-06-24 14:29:58,140 INFO: Saved results/dpsgd_results.csv
+2026-06-24 14:29:58,140 INFO: === Module 11: PRV vs. RDP Composition (Gopi et al. 2021) ===
+2026-06-24 14:29:58,326 INFO:   k=  1  ε₀=0.1  RDP=0.272  PRV=0.137  tighter=49.7%
+2026-06-24 14:29:58,326 INFO:   k=  2  ε₀=0.1  RDP=0.361  PRV=0.253  tighter=29.9%
+2026-06-24 14:29:58,326 INFO:   k=  5  ε₀=0.1  RDP=0.628  PRV=0.523  tighter=16.7%
+2026-06-24 14:29:58,327 INFO:   k= 10  ε₀=0.1  RDP=1.074  PRV=0.839  tighter=21.8%
+2026-06-24 14:29:58,327 INFO:   k= 20  ε₀=0.1  RDP=1.935  PRV=1.344  tighter=30.6%
+2026-06-24 14:29:58,327 INFO:   k= 50  ε₀=0.1  RDP=3.429  PRV=2.543  tighter=25.8%
+2026-06-24 14:29:58,327 INFO:   k=100  ε₀=0.1  RDP=5.076  PRV=4.217  tighter=16.9%
+2026-06-24 14:29:58,327 INFO:   k=  1  ε₀=0.3  RDP=0.472  PRV=0.332  tighter=29.6%
+2026-06-24 14:29:58,327 INFO:   k=  2  ε₀=0.3  RDP=0.761  PRV=0.640  tighter=15.9%
+2026-06-24 14:29:58,327 INFO:   k=  5  ε₀=0.3  RDP=1.628  PRV=1.337  tighter=17.9%
+2026-06-24 14:29:58,327 INFO:   k= 10  ε₀=0.3  RDP=3.074  PRV=2.130  tighter=30.7%
+2026-06-24 14:29:58,327 INFO:   k= 20  ε₀=0.3  RDP=5.876  PRV=3.279  tighter=44.2%
+2026-06-24 14:29:58,327 INFO:   k= 50  ε₀=0.3  RDP=10.975  PRV=5.738  tighter=47.7%
+2026-06-24 14:29:58,327 INFO:   k=100  ε₀=0.3  RDP=17.149  PRV=8.832  tighter=48.5%
+2026-06-24 14:29:58,327 INFO: Saved results/prv_composition.csv
+2026-06-24 14:29:58,549 INFO: === Statistical Analysis Tables ===
