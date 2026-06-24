@@ -53,9 +53,9 @@ _CLASS_NAMES = ['Normal', 'DoS', 'Probe', 'R2L', 'U2R']
 
 
 def encode_binary_labels(y_raw):
-    """'normal' → 0, any attack → 1."""
+    """'normal' / 'Normal' / 'NORMAL' → 0, any attack → 1. Case-insensitive."""
     y = np.asarray(y_raw, dtype=str)
-    return (y != 'normal').astype(int)
+    return (np.char.lower(y) != 'normal').astype(int)
 
 
 def encode_multiclass_labels(y_raw):

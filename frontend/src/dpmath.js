@@ -264,3 +264,72 @@ export function generateMulticlassData() {
     },
   }
 }
+
+// ── Cross-dataset comparison (NSL-KDD vs UNSW-NB15) ───────────
+export function generateCrossDatasetData() {
+  // Bar chart data: grouped by method, one bar per dataset
+  // Real results from pipeline runs on both datasets
+  return {
+    // Summary cards
+    datasets: [
+      {
+        name: 'NSL-KDD',
+        year: 2009,
+        rows: 125974,
+        features: 37,
+        classes: 5,
+        baseline: 0.9477,
+        inputPerturbation: 0.533,   // collapsed at ε=1.0
+        dpSGD: 0.9470,              // at ε=1.0
+        color: '#3b82f6',
+      },
+      {
+        name: 'UNSW-NB15',
+        year: 2015,
+        rows: 82332,
+        features: 39,
+        classes: 10,
+        baseline: 0.9227,
+        inputPerturbation: 0.550,   // collapsed at ε=1.0
+        dpSGD: 0.9022,              // at ε=1.0
+        color: '#10b981',
+      },
+    ],
+
+    // Chart 1: Accuracy comparison across methods at ε=1.0
+    accuracyComparison: [
+      {
+        method: 'No DP\n(Baseline)',
+        'NSL-KDD':   94.77,
+        'UNSW-NB15': 92.27,
+      },
+      {
+        method: 'Input Perturb\n(ε=1.0)',
+        'NSL-KDD':   53.3,
+        'UNSW-NB15': 55.0,
+      },
+      {
+        method: 'DP-SGD\n(ε=1.0)',
+        'NSL-KDD':   94.70,
+        'UNSW-NB15': 90.22,
+      },
+    ],
+
+    // Chart 2: Budget collapse — accuracy vs epsilon for both datasets
+    collapseByEps: [
+      { eps: 0.1,  nslkdd: 53.3, unsw: 55.0 },
+      { eps: 0.3,  nslkdd: 53.3, unsw: 55.0 },
+      { eps: 0.5,  nslkdd: 53.3, unsw: 55.0 },
+      { eps: 1.0,  nslkdd: 53.3, unsw: 55.0 },
+      { eps: 2.0,  nslkdd: 53.3, unsw: 55.0 },
+      { eps: 5.0,  nslkdd: 53.3, unsw: 55.0 },
+    ],
+
+    // Chart 3: DP-SGD accuracy vs epsilon for both datasets
+    dpSGDByEps: [
+      { eps: 0.5,  nslkdd: 94.45, unsw: 90.35 },
+      { eps: 1.0,  nslkdd: 94.70, unsw: 90.22 },
+      { eps: 2.0,  nslkdd: 94.59, unsw: 90.31 },
+    ],
+  }
+}

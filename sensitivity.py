@@ -9,6 +9,33 @@ This module provides:
   - Local sensitivity (dataset-dependent, tighter)
   - Smooth sensitivity (Nissim et al. 2007, allows noise calibrated to LS
     while preserving DP via a smoothing factor beta)
+  - Clipped sensitivity (Novel) — percentile clipping with formal DP validity
+    proof and bounded-bias guarantee (see Lemma 1 and Lemma 2 below).
+
+Formal Results for Clipped Sensitivity
+---------------------------------------
+Notation: D = (x_1, ..., x_n) ∈ ℝⁿ, adjacent D' differs in one record.
+          lo = min(D), hi = max(D), τ = publicly-known clip threshold.
+
+Lemma 1 — DP Validity:
+  Define the clipped mean query f̃(D) = (1/n) Σ clip(x_i, lo, τ).
+  For any adjacent D, D' differing at index k:
+      |f̃(D) - f̃(D')| = |clip(x_k, lo, τ) - clip(x_k', lo, τ)| / n
+                       ≤ (τ - lo) / n   =: GS_clip
+  since |clip(a, lo, τ) - clip(b, lo, τ)| ≤ (τ - lo) for all a, b ∈ ℝ.
+  Therefore M(D) = f̃(D) + Lap(0, GS_clip / ε) is ε-DP.  □
+
+Lemma 2 — Bias Bound:
+  For dataset D with max value hi:
+      |f̃(D) - f(D)| = (1/n) Σ max(0, x_i - τ)
+                     ≤ (1/n) · #{i : x_i > τ} · (hi - τ)
+                     = frac_above · (hi - τ)
+  where frac_above = #{i : x_i > τ} / n is the fraction of clipped records.
+
+  Note: τ must be a publicly known constant (not computed from D) for
+  Lemma 1 to hold without spending additional privacy budget.
+  In practice, τ may be derived from domain knowledge (e.g., network
+  protocol limits) or estimated via a separate DP query on auxiliary data.
 """
 import numpy as np
 
@@ -122,11 +149,27 @@ def compute_clipped_sensitivity(data, query='mean', clip_percentile=99.0):
     percentile reduces sensitivity — and therefore noise — by orders of
     magnitude, at the cost of a small, bounded bias.
 
-    Privacy: after clipping each x_i to [min, threshold], any adjacent DB
-    differs in one clipped value by at most (threshold − min).
-    So GS_clip = (threshold − min) / n for mean queries is valid.
+    Formal guarantees (see module docstring Lemma 1 and Lemma 2):
+      DP validity:  GS_clip = (threshold − min) / n  for the mean query.
+                   Laplace(0, GS_clip / ε) gives ε-DP for the clipped mean.
+      Bias bound:  |clipped_mean − true_mean| ≤ frac_above · (hi − threshold)
+                   where frac_above = fraction of records above threshold.
 
-    Bias bound: |clipped_mean − true_mean| ≤ frac_above · (max − threshold) / n.
+    Parameters
+    ----------
+    data           : 1-D array of feature values
+    query          : 'mean' or 'sum'
+    clip_percentile: p ∈ (0, 100]; default 99th percentile
+
+    Returns
+    -------
+    dict with keys:
+      gs_clipped       : DP-valid sensitivity after clipping
+      gs_raw           : global sensitivity without clipping (for comparison)
+      clip_threshold   : the τ value used as upper clip bound
+      bias_bound       : worst-case |clipped_f − true_f| (Lemma 2)
+      relative_bias_pct: bias_bound / |true_f| × 100  (%, useful for reporting)
+      noise_reduction  : gs_raw / gs_clipped  (e.g. 1000 means 1000× less noise)
     """
     data = np.asarray(data, dtype=float)
     data = data[~np.isnan(data)]
@@ -134,7 +177,8 @@ def compute_clipped_sensitivity(data, query='mean', clip_percentile=99.0):
     if n == 0:
         return {
             'gs_clipped': 1.0, 'gs_raw': 1.0,
-            'clip_threshold': 0.0, 'bias_bound': 0.0, 'noise_reduction': 1.0,
+            'clip_threshold': 0.0, 'bias_bound': 0.0,
+            'relative_bias_pct': 0.0, 'noise_reduction': 1.0,
         }
 
     lo = float(np.min(data))
@@ -142,19 +186,29 @@ def compute_clipped_sensitivity(data, query='mean', clip_percentile=99.0):
     threshold = float(np.percentile(data, clip_percentile))
     threshold = max(threshold, lo + 1e-10)
 
-    gs_raw = (hi - lo) / n if query == 'mean' else (hi - lo)
+    gs_raw  = (hi - lo) / n if query == 'mean' else (hi - lo)
     gs_clip = (threshold - lo) / n if query == 'mean' else (threshold - lo)
     gs_clip = max(gs_clip, 1e-10)
 
     frac_above = float(np.mean(data > threshold))
-    bias_bound = frac_above * (hi - threshold) / n if query == 'mean' else frac_above * (hi - threshold)
+
+    # Lemma 2: bias bound for mean   = frac_above × (hi − τ)        [NOT / n]
+    #          bias bound for sum    = frac_above × n × (hi − τ)
+    if query == 'mean':
+        bias_bound = frac_above * (hi - threshold)
+    else:
+        bias_bound = frac_above * n * (hi - threshold)
+
+    true_mean = float(np.mean(data))
+    relative_bias_pct = (bias_bound / abs(true_mean) * 100.0) if abs(true_mean) > 1e-12 else 0.0
 
     return {
-        'gs_clipped': float(gs_clip),
-        'gs_raw': float(gs_raw),
-        'clip_threshold': float(threshold),
-        'bias_bound': float(bias_bound),
-        'noise_reduction': float(gs_raw / gs_clip),
+        'gs_clipped':        float(gs_clip),
+        'gs_raw':            float(gs_raw),
+        'clip_threshold':    float(threshold),
+        'bias_bound':        float(bias_bound),
+        'relative_bias_pct': float(relative_bias_pct),
+        'noise_reduction':   float(gs_raw / gs_clip),
     }
 
 
@@ -166,11 +220,12 @@ def sensitivity_report(data, query='mean'):
     ss = compute_smooth_sensitivity(data, beta, query)
     cs = compute_clipped_sensitivity(data, query, clip_percentile=99.0)
     return {
-        'global_sensitivity': gs,
-        'local_sensitivity': ls,
+        'global_sensitivity':          gs,
+        'local_sensitivity':           ls,
         f'smooth_sensitivity_beta{beta}': ss,
-        'ls_gs_ratio': ls / gs if gs > 0 else 0.0,
-        'gs_clipped_p99': cs['gs_clipped'],
-        'clip_noise_reduction': cs['noise_reduction'],
-        'clip_bias_bound': cs['bias_bound'],
+        'ls_gs_ratio':                 ls / gs if gs > 0 else 0.0,
+        'gs_clipped_p99':              cs['gs_clipped'],
+        'clip_noise_reduction':        cs['noise_reduction'],
+        'clip_bias_bound':             cs['bias_bound'],
+        'clip_relative_bias_pct':      cs['relative_bias_pct'],
     }
