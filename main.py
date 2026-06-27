@@ -44,6 +44,7 @@ from weighted_budget import budget_comparison_report
 from prv_accountant import PRVAccountant, run_prv_vs_rdp_experiment
 from statistical_analysis import run_all_tables
 from multi_dataset import load_dataset, detect_dataset_type
+from spark_pipeline import run_spark_dp_pipeline, run_pandas_dp_pipeline
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +88,8 @@ def parse_args():
                    help='Skip PRV vs. RDP composition experiment')
     p.add_argument('--skip_stats', action='store_true',
                    help='Skip statistical analysis table generation')
+    p.add_argument('--skip_spark_pipeline', action='store_true',
+                   help='Skip the distributed Spark DP pipeline module')
     p.add_argument('--no_spark', action='store_true',
                    help='Use pandas instead of Spark (works without a Spark installation)')
     p.add_argument('--max_ml_rows', type=int, default=20000,
@@ -870,6 +873,62 @@ def run_prv_module(epsilons, mechanisms, delta, results_dir):
     return rows
 
 
+def _run_spark_dp_pipeline_module(spark, df_pandas, features, label_col,
+                                   data_path, eps_list, delta, results_dir,
+                                   use_spark):
+    """
+    Module: Distributed Spark DP Pipeline
+    ======================================
+    Runs the full importance-weighted DP noise injection pipeline:
+      - Distributed MI computation (on Spark workers) or single-machine fallback
+      - Per-feature ε allocation via weighted budget
+      - Laplace noise injection distributed across partitions
+    Saves per-feature ε allocation and noise metadata to CSV.
+    """
+    logging.info('=== Module: Spark Distributed DP Pipeline ===')
+    rows = []
+
+    for method in ['mi', 'variance', 'snr', 'uniform']:
+        for eps in eps_list:
+            try:
+                if use_spark and spark is not None:
+                    logging.info(f'  [Spark] method={method} ε={eps} — distributed run')
+                    result = run_spark_dp_pipeline(
+                        spark, data_path, label_col,
+                        total_eps=eps, method=method,
+                        mechanism='laplace', clip_pct=99.0, delta=delta,
+                        feature_cols=features,
+                    )
+                else:
+                    logging.info(f'  [pandas] method={method} ε={eps} — single-machine fallback')
+                    result = run_pandas_dp_pipeline(
+                        df_pandas, label_col, features,
+                        total_eps=eps, method=method,
+                        mechanism='laplace', clip_pct=99.0, delta=delta,
+                    )
+
+                # Top-3 features by allocated ε
+                top3 = sorted(result['epsilons'].items(), key=lambda x: -x[1])[:3]
+                top3_str = ' | '.join(f'{f}={e:.4f}' for f, e in top3)
+
+                rows.append({
+                    'method':        method,
+                    'epsilon_total': eps,
+                    'mode':          'spark' if (use_spark and spark is not None) else 'pandas',
+                    'n_features':    len(features),
+                    'top3_eps':      top3_str,
+                    'min_eps':       min(result['epsilons'].values()),
+                    'max_eps':       max(result['epsilons'].values()),
+                })
+
+            except Exception as ex:
+                logging.warning(f'  Spark pipeline failed method={method} ε={eps}: {ex}')
+
+    if rows:
+        save_csv(rows, os.path.join(results_dir, 'spark_dp_pipeline.csv'))
+        logging.info(f'Saved results/spark_dp_pipeline.csv  ({len(rows)} rows)')
+
+
 def main():
     args = parse_args()
     setup_logging(args.log)
@@ -978,6 +1037,14 @@ def main():
     if not args.skip_stats:
         logging.info('=== Statistical Analysis Tables ===')
         run_all_tables(args.results_dir)
+
+    # ── Spark distributed DP pipeline (if Spark available) ──────────────────
+    if not args.skip_spark_pipeline:
+        logging.info('=== Spark Distributed DP Pipeline ===')
+        _run_spark_dp_pipeline_module(
+            spark, df_pandas, features, label_col, args.dataset,
+            eps, delta, args.results_dir, use_spark
+        )
 
     if spark is not None:
         spark.stop()
