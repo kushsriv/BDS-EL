@@ -46,7 +46,7 @@ def _wilcoxon(x, y):
 def _save(rows, path):
     if not rows:
         return
-    with open(path, 'w', newline='') as f:
+    with open(path, 'w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=rows[0].keys())
         w.writeheader()
         w.writerows(rows)
@@ -469,7 +469,7 @@ def generate_master_summary(results_dir):
     lines.append('\n' + '=' * 70)
     summary_text = '\n'.join(lines)
     out_path = os.path.join(results_dir, 'master_summary.txt')
-    with open(out_path, 'w') as f:
+    with open(out_path, 'w', encoding='utf-8') as f:
         f.write(summary_text)
     print(f'  Saved {out_path}')
     print(summary_text)

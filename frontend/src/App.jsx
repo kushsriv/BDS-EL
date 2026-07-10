@@ -175,8 +175,8 @@ function PrivacyUtilitySection({ eps }) {
 // =====================================================================
 // SECTION 2 — Sensitivity Analysis
 // =====================================================================
-function SensitivitySection() {
-  const data = generateSensitivityData()
+function SensitivitySection({ live }) {
+  const data = live?.sensitivity ?? generateSensitivityData()
 
   return (
     <Section id="s2" num={2} title="Data-Driven Sensitivity"
@@ -360,8 +360,8 @@ function AmplificationSection() {
 // =====================================================================
 // SECTION 5 — Membership Inference Attack
 // =====================================================================
-function MIASection({ eps }) {
-  const data = generateMIAData()
+function MIASection({ eps, live }) {
+  const data = live?.mia ?? generateMIAData()
 
   return (
     <Section id="s5" num={5} title="Membership Inference Attack Validation"
@@ -495,10 +495,10 @@ function LDPSection({ eps }) {
 // =====================================================================
 // SECTION 7 — DP-ML (Input Perturbation — collapses at 37 features)
 // =====================================================================
-function MLSection() {
-  const data = generateMLData()
+function MLSection({ live }) {
+  const data = live?.ml ?? generateMLData()
   const finiteData = data.filter(d => isFinite(d.epsilon))
-  const baseAcc = data[0]?.laplace_acc ?? 0.9477
+  const baseAcc = live?.ml_baseline ?? data[0]?.laplace_acc ?? 0.9477
 
   return (
     <Section id="s7" num={7} title="DP Machine Learning — Input Perturbation"
@@ -557,8 +557,8 @@ function MLSection() {
 // =====================================================================
 // SECTION 8 — DP-SGD
 // =====================================================================
-function DPSGDSection() {
-  const sgdData = generateDPSGDData()
+function DPSGDSection({ live }) {
+  const sgdData = live?.dpsgd ?? generateDPSGDData()
   const baseAcc = 0.9477
 
   // Combined chart data: both input-perturbation and DP-SGD
@@ -639,8 +639,8 @@ function DPSGDSection() {
 // =====================================================================
 // SECTION 9 — Clipped Sensitivity
 // =====================================================================
-function ClippedSensSection() {
-  const data = generateClippedSensData()
+function ClippedSensSection({ live }) {
+  const data = live?.clipped_sens ?? generateClippedSensData()
   const top8 = data.slice(0, 8)
 
   return (
@@ -696,8 +696,8 @@ function ClippedSensSection() {
 // =====================================================================
 // SECTION 10 — PRV Accountant
 // =====================================================================
-function PRVSection() {
-  const data = generatePRVData()
+function PRVSection({ live }) {
+  const data = live?.prv ?? generatePRVData()
 
   return (
     <Section id="s10" num={10} title="PRV Accountant — Novel Contribution"
@@ -766,8 +766,8 @@ function PRVSection() {
 // =====================================================================
 // SECTION 11 — Multi-class IDS
 // =====================================================================
-function MulticlassSection() {
-  const { baseline, collapsed } = generateMulticlassData()
+function MulticlassSection({ live }) {
+  const { baseline, collapsed } = live?.multiclass ?? generateMulticlassData()
   const classes = ['Normal', 'DoS', 'Probe', 'R2L', 'U2R']
   const colors   = [C.green, C.red, C.amber, C.cyan, C.purple]
 
@@ -928,8 +928,25 @@ function CrossDatasetSection() {
 // =====================================================================
 // SECTION 13 — Spark Distributed DP Pipeline
 // =====================================================================
-function SparkPipelineSection() {
-  const { featureBudget, methodComparison, accuracyByMethod, budgetByEps } = generateSparkPipelineData()
+function SparkPipelineSection({ live }) {
+  const fallback = generateSparkPipelineData()
+  const featureBudget    = live?.spark_feature_budget   ?? fallback.featureBudget
+  const methodComparison = live?.spark_method_comparison ?? fallback.methodComparison
+  const budgetByEps      = live?.spark_budget_by_eps     ?? fallback.budgetByEps
+
+  // Compute accuracyByMethod from live CSV results
+  let accuracyByMethod = fallback.accuracyByMethod
+  if (live?.budget_accuracy) {
+    const ba = live.budget_accuracy
+    const epsLabel = ba.max_eps ? `ε=${ba.max_eps}` : 'ε=5.0'
+    const dpsgdAcc = live?.dpsgd?.find(d => d.epsilon === 1.0)?.accuracy ?? 0.9470
+    accuracyByMethod = [
+      { method: 'No DP',                      accuracy: (ba.no_dp ?? 0.9477) * 100,         color: '#10b981' },
+      { method: `Uniform (${epsLabel})`,       accuracy: (ba.uniform_max_eps ?? 0.5429) * 100, color: '#ef4444' },
+      { method: `MI-Weighted (${epsLabel})`,   accuracy: (ba.mi_max_eps ?? 0.8095) * 100,    color: '#3b82f6' },
+      { method: 'DP-SGD (ε=1.0)',              accuracy: dpsgdAcc * 100,                      color: '#06b6d4' },
+    ]
+  }
 
   return (
     <Section id="s13" num={13} title="Spark Distributed DP Pipeline"
@@ -1107,10 +1124,23 @@ function Counter({ target, suffix = '' }) {
   return <>{val.toLocaleString()}{suffix}</>
 }
 
-function HeroSection({ eps, setEps }) {
+function HeroSection({ eps, setEps, liveData }) {
+  const updatedAt = liveData?.generated_at
+    ? new Date(liveData.generated_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    : null
   return (
     <div className="hero">
-      <div className="hero-eyebrow">BDS-EL · NSL-KDD &amp; UNSW-NB15 Privacy Research</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+        <div className="hero-eyebrow" style={{ margin: 0 }}>BDS-EL · NSL-KDD &amp; UNSW-NB15 Privacy Research</div>
+        <div style={{
+          padding: '2px 10px', borderRadius: 20, fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 600,
+          background: liveData ? 'rgba(16,185,129,0.12)' : 'rgba(100,116,139,0.12)',
+          color: liveData ? '#10b981' : '#64748b',
+          border: `1px solid ${liveData ? 'rgba(16,185,129,0.3)' : 'rgba(100,116,139,0.3)'}`,
+        }}>
+          {liveData ? `LIVE DATA · ${updatedAt}` : 'DEMO DATA · run python main.py to load real results'}
+        </div>
+      </div>
       <h1 className="hero-title">Differential Privacy<br />Research Dashboard</h1>
       <p className="hero-sub">
         Empirical privacy–utility analysis across 13 experiment modules on 2 benchmark datasets:
@@ -1155,6 +1185,15 @@ function HeroSection({ eps, setEps }) {
 export default function App() {
   const [eps, setEps] = useState(1.0)
   const [activeNav, setActiveNav] = useState('s1')
+  const [liveData, setLiveData] = useState(null)
+
+  // Fetch live results from results_data.json (generated by python main.py)
+  useEffect(() => {
+    fetch('/results_data.json')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.status === 'live') setLiveData(d) })
+      .catch(() => {})
+  }, [])
 
   // Scroll spy
   useEffect(() => {
@@ -1188,25 +1227,25 @@ export default function App() {
       </nav>
 
       {/* ── Hero ───────────────────────────────────── */}
-      <HeroSection eps={eps} setEps={setEps} />
+      <HeroSection eps={eps} setEps={setEps} liveData={liveData} />
 
       {/* ── Divider ────────────────────────────────── */}
       <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(59,130,246,0.2), transparent)', margin: '0 32px' }} />
 
       {/* ── Sections ───────────────────────────────── */}
       <PrivacyUtilitySection eps={eps} />
-      <SensitivitySection />
+      <SensitivitySection live={liveData} />
       <CompositionSection eps={eps} />
       <AmplificationSection />
-      <MIASection eps={eps} />
+      <MIASection eps={eps} live={liveData} />
       <LDPSection eps={eps} />
-      <MLSection />
-      <DPSGDSection />
-      <ClippedSensSection />
-      <PRVSection />
-      <MulticlassSection />
+      <MLSection live={liveData} />
+      <DPSGDSection live={liveData} />
+      <ClippedSensSection live={liveData} />
+      <PRVSection live={liveData} />
+      <MulticlassSection live={liveData} />
       <CrossDatasetSection />
-      <SparkPipelineSection />
+      <SparkPipelineSection live={liveData} />
 
       {/* ── Footer ─────────────────────────────────── */}
       <footer style={{ borderTop: '1px solid var(--border)', padding: '48px 32px', maxWidth: 1400, margin: '0 auto' }}>
