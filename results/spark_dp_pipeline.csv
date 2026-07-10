@@ -1,0 +1,25 @@
+method,epsilon_total,mode,n_features,top3_eps,min_eps,max_eps
+mi,0.1,pandas,37,same_srv_rate=0.0089 | srv_rerror_rate=0.0082 | dst_host_same_srv_rate=0.0078,2.6962765407232387e-05,0.008931588338753403
+mi,0.3,pandas,37,same_srv_rate=0.0268 | srv_rerror_rate=0.0246 | dst_host_same_srv_rate=0.0233,8.088829622169716e-05,0.026794765016260203
+mi,0.5,pandas,37,same_srv_rate=0.0447 | srv_rerror_rate=0.0411 | dst_host_same_srv_rate=0.0389,0.00013481382703616192,0.04465794169376701
+mi,1.0,pandas,37,same_srv_rate=0.0893 | srv_rerror_rate=0.0822 | dst_host_same_srv_rate=0.0777,0.00026962765407232385,0.08931588338753402
+mi,2.0,pandas,37,same_srv_rate=0.1786 | srv_rerror_rate=0.1643 | dst_host_same_srv_rate=0.1554,0.0005392553081446477,0.17863176677506803
+mi,5.0,pandas,37,same_srv_rate=0.4466 | srv_rerror_rate=0.4108 | dst_host_same_srv_rate=0.3886,0.0013481382703616192,0.4465794169376701
+variance,0.1,pandas,37,flag=0.0674 | src_bytes=0.0316 | dst_bytes=0.0000,2.6773761735344407e-05,0.0674242992630933
+variance,0.3,pandas,37,flag=0.2023 | src_bytes=0.0949 | dst_bytes=0.0001,8.032128520603322e-05,0.2022728977892799
+variance,0.5,pandas,37,flag=0.3371 | src_bytes=0.1582 | dst_bytes=0.0001,0.00013386880867672203,0.3371214963154665
+variance,1.0,pandas,37,flag=0.6742 | src_bytes=0.3164 | dst_bytes=0.0003,0.00026773761735344407,0.674242992630933
+variance,2.0,pandas,37,flag=1.3485 | src_bytes=0.6328 | dst_bytes=0.0005,0.0005354752347068881,1.348485985261866
+variance,5.0,pandas,37,flag=3.3712 | src_bytes=1.5819 | dst_bytes=0.0013,0.0013386880867672203,3.371214963154665
+snr,0.1,pandas,37,num_failed_logins=0.0070 | dst_host_srv_count=0.0064 | serror_rate=0.0064,2.7019724398811132e-05,0.006966252165000835
+snr,0.3,pandas,37,num_failed_logins=0.0209 | dst_host_srv_count=0.0192 | serror_rate=0.0191,8.105917319643339e-05,0.020898756495002502
+snr,0.5,pandas,37,num_failed_logins=0.0348 | dst_host_srv_count=0.0320 | serror_rate=0.0318,0.00013509862199405565,0.03483126082500417
+snr,1.0,pandas,37,num_failed_logins=0.0697 | dst_host_srv_count=0.0640 | serror_rate=0.0637,0.0002701972439881113,0.06966252165000834
+snr,2.0,pandas,37,num_failed_logins=0.1393 | dst_host_srv_count=0.1279 | serror_rate=0.1274,0.0005403944879762226,0.1393250433000167
+snr,5.0,pandas,37,num_failed_logins=0.3483 | dst_host_srv_count=0.3198 | serror_rate=0.3184,0.0013509862199405564,0.34831260825004173
+uniform,0.1,pandas,37,flag=0.0027 | src_bytes=0.0027 | dst_bytes=0.0027,0.0027027027027027037,0.0027027027027027037
+uniform,0.3,pandas,37,flag=0.0081 | src_bytes=0.0081 | dst_bytes=0.0081,0.00810810810810811,0.00810810810810811
+uniform,0.5,pandas,37,flag=0.0135 | src_bytes=0.0135 | dst_bytes=0.0135,0.013513513513513518,0.013513513513513518
+uniform,1.0,pandas,37,flag=0.0270 | src_bytes=0.0270 | dst_bytes=0.0270,0.027027027027027035,0.027027027027027035
+uniform,2.0,pandas,37,flag=0.0541 | src_bytes=0.0541 | dst_bytes=0.0541,0.05405405405405407,0.05405405405405407
+uniform,5.0,pandas,37,flag=0.1351 | src_bytes=0.1351 | dst_bytes=0.1351,0.13513513513513517,0.13513513513513517
