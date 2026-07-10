@@ -887,6 +887,7 @@ def _run_spark_dp_pipeline_module(spark, df_pandas, features, label_col,
     """
     logging.info('=== Module: Spark Distributed DP Pipeline ===')
     rows = []
+    feature_rows = []
 
     for method in ['mi', 'variance', 'snr', 'uniform']:
         for eps in eps_list:
@@ -921,12 +922,24 @@ def _run_spark_dp_pipeline_module(spark, df_pandas, features, label_col,
                     'max_eps':       max(result['epsilons'].values()),
                 })
 
+                # Save ALL per-feature ε allocations for the frontend live chart
+                for feat, feat_eps in result['epsilons'].items():
+                    feature_rows.append({
+                        'method':             method,
+                        'epsilon_total':      eps,
+                        'feature':            feat,
+                        'epsilon_allocated':  feat_eps,
+                    })
+
             except Exception as ex:
                 logging.warning(f'  Spark pipeline failed method={method} ε={eps}: {ex}')
 
     if rows:
         save_csv(rows, os.path.join(results_dir, 'spark_dp_pipeline.csv'))
         logging.info(f'Saved results/spark_dp_pipeline.csv  ({len(rows)} rows)')
+    if feature_rows:
+        save_csv(feature_rows, os.path.join(results_dir, 'feature_budget.csv'))
+        logging.info(f'Saved results/feature_budget.csv  ({len(feature_rows)} rows)')
 
 
 def main():
@@ -1049,6 +1062,13 @@ def main():
     if spark is not None:
         spark.stop()
     logging.info('All experiments complete.  Results in: ' + args.results_dir)
+
+    # Export all CSVs → frontend/public/results_data.json for live dashboard
+    try:
+        from export_results import export_results
+        export_results(results_dir=args.results_dir)
+    except Exception as ex:
+        logging.warning(f'Could not export results JSON: {ex}')
 
 
 if __name__ == '__main__':
