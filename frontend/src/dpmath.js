@@ -333,3 +333,53 @@ export function generateCrossDatasetData() {
     ],
   }
 }
+
+// ── Spark distributed pipeline data (real results from spark_dp_pipeline.csv) ─
+export function generateSparkPipelineData() {
+  const UNIFORM = 0.02703
+
+  // MI-weighted ε per feature at ε_total=1.0 (real data from pipeline run)
+  const featureBudget = [
+    { feature: 'same_srv_rate',          mi: 0.0893, uniform: UNIFORM },
+    { feature: 'srv_rerror_rate',        mi: 0.0822, uniform: UNIFORM },
+    { feature: 'dst_host_same_srv_rate', mi: 0.0777, uniform: UNIFORM },
+    { feature: 'rerror_rate',            mi: 0.0621, uniform: UNIFORM },
+    { feature: 'dst_host_rerror_rate',   mi: 0.0598, uniform: UNIFORM },
+    { feature: 'serror_rate',            mi: 0.0541, uniform: UNIFORM },
+    { feature: 'dst_host_serror_rate',   mi: 0.0489, uniform: UNIFORM },
+    { feature: 'logged_in',             mi: 0.0412, uniform: UNIFORM },
+    { feature: 'dst_host_srv_count',     mi: 0.0380, uniform: UNIFORM },
+    { feature: 'count',                  mi: 0.0271, uniform: UNIFORM },
+    { feature: 'land',                   mi: 0.0009, uniform: UNIFORM },
+    { feature: 'urgent',                 mi: 0.0004, uniform: UNIFORM },
+    { feature: 'num_outbound_cmds',      mi: 0.0003, uniform: UNIFORM },
+  ]
+
+  // Max ε, min ε, concentration ratio per method at ε_total=1.0
+  const methodComparison = [
+    { method: 'MI-Weighted',       max: 0.0893, min: 0.000270, ratio: 331,  color: '#3b82f6' },
+    { method: 'SNR-Heuristic',     max: 0.0697, min: 0.000270, ratio: 258,  color: '#8b5cf6' },
+    { method: 'Variance-Weighted', max: 0.6742, min: 0.000268, ratio: 2515, color: '#f59e0b' },
+    { method: 'Uniform',           max: 0.0270, min: 0.027027, ratio: 1,    color: '#475569' },
+  ]
+
+  // Real accuracy results from dp_ml_results.csv
+  const accuracyByMethod = [
+    { method: 'No DP',             accuracy: 94.77, color: '#10b981' },
+    { method: 'Uniform (ε=5.0)',   accuracy: 54.29, color: '#ef4444' },
+    { method: 'MI-Weighted (ε=5.0)', accuracy: 80.95, color: '#3b82f6' },
+    { method: 'DP-SGD (ε=1.0)',    accuracy: 94.70, color: '#06b6d4' },
+  ]
+
+  // Max allocated ε vs uniform across all ε_total values
+  const budgetByEps = [
+    { eps: 0.1, mi_max: 0.0089, uniform: 0.00270 },
+    { eps: 0.3, mi_max: 0.0268, uniform: 0.00811 },
+    { eps: 0.5, mi_max: 0.0447, uniform: 0.01351 },
+    { eps: 1.0, mi_max: 0.0893, uniform: 0.02703 },
+    { eps: 2.0, mi_max: 0.1786, uniform: 0.05405 },
+    { eps: 5.0, mi_max: 0.4466, uniform: 0.13514 },
+  ]
+
+  return { featureBudget, methodComparison, accuracyByMethod, budgetByEps }
+}

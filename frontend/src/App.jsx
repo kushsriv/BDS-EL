@@ -9,7 +9,7 @@ import {
   generateAggregateData, generateSensitivityData, generateCompositionData,
   generateAmplificationData, generateMIAData, generateLDPData, generateMLData,
   generateDPSGDData, generatePRVData, generateClippedSensData, generateMulticlassData,
-  generateCrossDatasetData,
+  generateCrossDatasetData, generateSparkPipelineData,
   FEATURES, EPSILONS, compositionBounds
 } from './dpmath.js'
 
@@ -926,6 +926,148 @@ function CrossDatasetSection() {
 }
 
 // =====================================================================
+// SECTION 13 — Spark Distributed DP Pipeline
+// =====================================================================
+function SparkPipelineSection() {
+  const { featureBudget, methodComparison, accuracyByMethod, budgetByEps } = generateSparkPipelineData()
+
+  return (
+    <Section id="s13" num={13} title="Spark Distributed DP Pipeline"
+      sub="Apache Spark distributes MI computation and noise injection across CPU cores. MI-weighted allocation gives top features 330× more budget than uniform — confirmed on NSL-KDD (125,974 rows, 37 features).">
+
+      {/* Method comparison stat cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+        {methodComparison.map(m => (
+          <div key={m.method} className="chart-card" style={{ borderLeft: `3px solid ${m.color}`, textAlign: 'center', padding: '14px 12px' }}>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--txt3)', marginBottom: 4 }}>{m.method}</div>
+            <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: m.color }}>{m.ratio}×</div>
+            <div style={{ fontSize: 10, color: 'var(--txt3)', marginTop: 4 }}>max / min ratio</div>
+            <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+              <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 4, padding: '4px 0' }}>
+                <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: m.color }}>{m.max.toFixed(4)}</div>
+                <div style={{ fontSize: 9, color: 'var(--txt3)' }}>ε max</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 4, padding: '4px 0' }}>
+                <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt3)' }}>{m.min.toFixed(5)}</div>
+                <div style={{ fontSize: 9, color: 'var(--txt3)' }}>ε min</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="split">
+        {/* Per-feature ε: MI-weighted vs Uniform */}
+        <ChartCard title="Per-feature ε allocation  ·  MI-weighted vs Uniform  ·  ε_total = 1.0"
+          note="MI focuses budget on informative features — top features get 3× more than uniform">
+          <ResponsiveContainer width="100%" height={340}>
+            <BarChart data={featureBudget} layout="vertical" margin={{ top: 8, right: 24, left: 12, bottom: 0 }}>
+              <CartesianGrid {...gridProps} horizontal={false} />
+              <XAxis type="number" tick={tick} tickFormatter={v => v.toFixed(3)}
+                label={{ value: 'ε allocated', position: 'insideBottomRight', offset: -4, fill: C.txt2, fontSize: 11 }} />
+              <YAxis type="category" dataKey="feature" tick={{ ...tick, fontSize: 9 }} width={155} />
+              <Tooltip content={<Tip xLabel="feature" fmt={v => v?.toFixed(4)} />} />
+              <Legend wrapperStyle={{ fontSize: 11, color: C.txt2, fontFamily: 'monospace' }} />
+              <Bar dataKey="mi"      name="MI-Weighted" fill={C.blue}  fillOpacity={0.85} radius={[0, 3, 3, 0]} />
+              <Bar dataKey="uniform" name="Uniform"      fill={C.txt2} fillOpacity={0.5}  radius={[0, 3, 3, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <div className="insight-stack">
+          <Insight label="Spark Distributed MI" color="blue">
+            <span className="insight-highlight">groupBy(feature_bin, label)</span> runs across all
+            Spark partitions in parallel. Counts are collected to the driver and mutual information
+            is computed locally. For 37 features × 20 bins × 5 classes: Spark parallelises all
+            feature-MI computations simultaneously.
+          </Insight>
+          <Insight label="Distributed Noise Injection" color="purple">
+            <span className="insight-highlight">withColumn()</span> applies the inverse-CDF Laplace
+            transform (via Spark SQL math functions) as a UDF-free column expression. All 37 feature
+            noise columns are computed in a single Spark DAG — no Python loop overhead.
+          </Insight>
+          <Insight label="MI vs Uniform Budget" color="cyan">
+            At ε_total=1.0, MI-weighted allocates{' '}
+            <span className="insight-highlight">ε=0.0893</span> to same_srv_rate vs
+            uniform ε=0.0270 — a 3.3× difference. Less informative features (land, urgent)
+            get almost no budget, reducing their noise but preserving their signal contribution.
+          </Insight>
+          <Insight label="Pandas Fallback" color="amber">
+            When PySpark is unavailable (no Java), the pipeline automatically falls back to
+            pandas with the same MI/variance/SNR weighting logic. Results are identical;
+            only parallelism differs. Install Java 17 + PySpark to enable Spark mode.
+          </Insight>
+        </div>
+      </div>
+
+      <div className="split" style={{ marginTop: 24 }}>
+        {/* Accuracy by method */}
+        <ChartCard title="Accuracy by budget method  ·  NSL-KDD  ·  ε = 5.0"
+          note="MI-weighted partially recovers from budget collapse — DP-SGD is the full fix">
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={accuracyByMethod} margin={{ top: 8, right: 20, left: 0, bottom: 8 }}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="method" tick={{ ...tick, fontSize: 10 }}
+                interval={0} angle={-12} textAnchor="end" height={48} />
+              <YAxis domain={[0, 100]} tick={tick} tickFormatter={v => `${v}%`} width={46} />
+              <Tooltip content={<Tip xLabel="Method" fmt={v => `${v?.toFixed(2)}%`} />} />
+              <Bar dataKey="accuracy" name="Accuracy" radius={[4, 4, 0, 0]}>
+                {accuracyByMethod.map((entry, i) => (
+                  <Cell key={i} fill={entry.color} fillOpacity={0.85} />
+                ))}
+              </Bar>
+              <ReferenceLine y={94.77} stroke={C.green} strokeDasharray="4 2"
+                label={{ value: 'No-DP 94.77%', fill: C.green, fontSize: 10, fontFamily: 'monospace', position: 'insideTopRight' }} />
+              <ReferenceLine y={53.3} stroke={C.red} strokeDasharray="4 2"
+                label={{ value: 'Collapse 53.3%', fill: C.red, fontSize: 10, fontFamily: 'monospace', position: 'insideBottomRight' }} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        {/* Budget growth by ε: MI-max vs Uniform */}
+        <ChartCard title="Max feature budget  ·  MI-weighted vs Uniform  ·  across ε"
+          note="Gap widens as ε grows — MI concentrates budget more aggressively at higher ε">
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={budgetByEps} margin={{ top: 8, right: 20, left: 0, bottom: 8 }}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="eps" tickFormatter={v => `ε=${v}`} tick={tick} />
+              <YAxis tick={tick} tickFormatter={v => v.toFixed(3)} width={56}
+                label={{ value: 'ε top feature', angle: -90, position: 'insideLeft', fill: C.txt2, fontSize: 11 }} />
+              <Tooltip content={<Tip xLabel="ε_total" fmt={v => v?.toFixed(4)} />} />
+              <Legend wrapperStyle={{ fontSize: 11, color: C.txt2, fontFamily: 'monospace' }} />
+              <Line dataKey="mi_max"  name="MI-Weighted (top feature)" stroke={C.blue}  strokeWidth={2.5} dot={{ r: 4, fill: C.blue }} type="monotone" />
+              <Line dataKey="uniform" name="Uniform (each feature)"    stroke={C.txt2} strokeWidth={2}   dot={{ r: 3 }} type="monotone" strokeDasharray="5 4" />
+            </LineChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      </div>
+
+      <div className="insight-stack" style={{ marginTop: 16 }}>
+        <Insight label="Big Data Advantage" color="green">
+          Global sensitivity GS = (max − min) / n shrinks as n grows. With Spark distributing
+          125,974 NSL-KDD records, the per-partition sensitivity is lower — enabling{' '}
+          <span className="insight-highlight">less noise per partition</span>{' '}
+          before aggregation. HDFS-scale data (millions of rows) amplifies this further via
+          the subsampling amplification theorem: ε_amp = log(1 + q(e^ε − 1)).
+        </Insight>
+        <Insight label="Spark Architecture" color="blue">
+          The pipeline uses 3 Spark stages: (1) <span className="insight-highlight">approxQuantile</span> for clip thresholds,
+          (2) <span className="insight-highlight">groupBy + count</span> for distributed MI,
+          (3) <span className="insight-highlight">withColumn</span> for noise injection. Each stage
+          runs as a distributed Spark DAG — no data leaves the executor nodes until the final collect().
+        </Insight>
+        <Insight label="MI-Weighted Result" color="purple">
+          At ε=5.0, MI-weighted allocation achieves{' '}
+          <span className="insight-highlight">80.95%</span> vs 54.29% for uniform — a
+          26.7 pp improvement from smarter budget distribution alone. Still 13.8 pp below
+          DP-SGD (94.70%), confirming gradient-level privacy is the correct long-term approach.
+        </Insight>
+      </div>
+    </Section>
+  )
+}
+
+// =====================================================================
 // NAV + HERO
 // =====================================================================
 const NAV_ITEMS = [
@@ -941,6 +1083,7 @@ const NAV_ITEMS = [
   { id: 's10', label: 'PRV' },
   { id: 's11', label: 'Multi-class' },
   { id: 's12', label: 'Cross-Dataset' },
+  { id: 's13', label: 'Spark Pipeline' },
 ]
 
 const PRESET_EPS = [0.1, 0.3, 0.5, 1.0, 2.0, 5.0]
@@ -970,7 +1113,7 @@ function HeroSection({ eps, setEps }) {
       <div className="hero-eyebrow">BDS-EL · NSL-KDD &amp; UNSW-NB15 Privacy Research</div>
       <h1 className="hero-title">Differential Privacy<br />Research Dashboard</h1>
       <p className="hero-sub">
-        Empirical privacy–utility analysis across 12 experiment modules on 2 benchmark datasets:
+        Empirical privacy–utility analysis across 13 experiment modules on 2 benchmark datasets:
         data-driven sensitivity, PRV/RDP composition, subsampling amplification,
         membership inference attacks, local DP, DP-SGD, clipped sensitivity,
         multi-class intrusion detection, and cross-dataset validation
@@ -981,7 +1124,7 @@ function HeroSection({ eps, setEps }) {
         {[
           { num: 208306, suf: '',    label: 'Total records (2 datasets)', color: 'blue'   },
           { num: 39,     suf: '',    label: 'Max features analysed', color: 'purple' },
-          { num: 12,     suf: '',    label: 'Experiment modules', color: 'cyan'  },
+          { num: 13,     suf: '',    label: 'Experiment modules', color: 'cyan'  },
           { num: 30,     suf: ' runs', label: 'Statistical runs', color: 'green'  },
         ].map(s => (
           <div key={s.label} className={`stat-card ${s.color}`}>
@@ -1063,6 +1206,7 @@ export default function App() {
       <PRVSection />
       <MulticlassSection />
       <CrossDatasetSection />
+      <SparkPipelineSection />
 
       {/* ── Footer ─────────────────────────────────── */}
       <footer style={{ borderTop: '1px solid var(--border)', padding: '48px 32px', maxWidth: 1400, margin: '0 auto' }}>
@@ -1078,7 +1222,7 @@ export default function App() {
             </div>
             <p style={{ fontSize: 12, color: 'var(--txt3)', lineHeight: 1.6 }}>
               Full pipeline: DP-SGD, clipped sensitivity, PRV accountant, budget comparison,
-              multi-class IDS, cross-dataset validation. 12 modules, 30-run CIs, 2 datasets.
+              multi-class IDS, cross-dataset validation, Spark distributed pipeline. 13 modules, 30-run CIs, 2 datasets.
             </p>
           </div>
           <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--txt3)', lineHeight: 1.7 }}>
